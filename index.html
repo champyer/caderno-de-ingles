@@ -305,6 +305,8 @@
   button:focus-visible,input:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:3px solid #70CFA0;outline-offset:3px;}
   .topbar{position:relative;z-index:20;}
   .settings-btn{width:44px;height:44px;border-radius:50%;border:1px solid rgba(247,242,229,.28);background:rgba(247,242,229,.08);color:var(--paper);font-size:20px;cursor:pointer;flex:0 0 auto;}
+  .top-actions{display:flex;align-items:center;gap:8px}.account-btn{max-width:190px;min-height:42px;border-radius:22px;border:1px solid rgba(247,242,229,.28);background:rgba(247,242,229,.08);color:var(--paper);padding:7px 12px;cursor:pointer;text-align:left}.account-btn b,.account-btn small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-btn small{opacity:.75;font-size:10px}.auth-panel{max-width:480px}.auth-fields{display:grid;gap:10px}.auth-fields input{width:100%;box-sizing:border-box;padding:13px 14px;border:1px solid #d7d3c8;border-radius:12px;font:inherit;background:#fff}.auth-actions{display:grid;gap:8px;margin-top:12px}.sync-note{padding:10px 12px;border-radius:12px;background:#f0ede3;font-size:12px;color:#4e5e59}.sync-note.ok{background:#e5f5e9;color:#176b39}.sync-note.error{background:#fde9e5;color:#9b2c20}.account-inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.link-btn{border:0;background:none;color:#8a5a00;text-decoration:underline;cursor:pointer;padding:5px}.auth-error{color:#9b2c20;font-size:12px;margin-top:8px}.auth-success{color:#176b39;font-size:12px;margin-top:8px}
+  @media(max-width:560px){.account-btn{max-width:112px;padding:6px 9px}.account-btn b{font-size:11px}.brand span{display:none}.top-actions{gap:5px}}
   .bottom-nav{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:80;width:min(640px,100%);display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:9px 12px calc(9px + env(safe-area-inset-bottom));background:rgba(15,27,26,.97);border-top:1px solid rgba(247,242,229,.16);backdrop-filter:blur(14px);}
   .bottom-nav button{min-height:56px;border:0;border-radius:14px;background:transparent;color:rgba(247,242,229,.7);font:600 12px Inter;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
   .bottom-nav button span{font-size:20px;line-height:1;}
@@ -903,7 +905,7 @@ function exportProgressJSON(){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-function validateProgressImport(parsed){if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))return {valid:false,error:"O arquivo precisa conter um objeto de progresso."};if(typeof hasUnsafeJsonKeys==="function"&&hasUnsafeJsonKeys(parsed))return {valid:false,error:"O arquivo contém chaves não permitidas."};const payload=parsed.profiles&&parsed.profiles[LOCAL_PROFILE_ID]&&parsed.profiles[LOCAL_PROFILE_ID].courses&&parsed.profiles[LOCAL_PROFILE_ID].courses[COURSE_ID]||parsed;if(!payload||typeof payload!=="object")return {valid:false,error:"Estrutura de perfil ou curso inválida."};if(payload.schemaVersion!=null&&(!Number.isInteger(payload.schemaVersion)||payload.schemaVersion<1||payload.schemaVersion>APP_SCHEMA_VERSION))return {valid:false,error:"Versão de progresso incompatível."};for(const key of ["stats","lessonProgress","srsByLesson","attemptRecords"])if(payload[key]!=null&&(typeof payload[key]!=="object"||Array.isArray(payload[key])))return {valid:false,error:`Campo ${key} inválido.`};return {valid:true};}
+function validateProgressImport(parsed){if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))return {valid:false,error:"O arquivo precisa conter um objeto de progresso."};if(typeof hasUnsafeJsonKeys==="function"&&hasUnsafeJsonKeys(parsed))return {valid:false,error:"O arquivo contém chaves não permitidas."};const pid=activeProfileId(),payload=parsed.profiles&&parsed.profiles[pid]&&parsed.profiles[pid].courses&&parsed.profiles[pid].courses[COURSE_ID]||parsed;if(!payload||typeof payload!=="object")return {valid:false,error:"Estrutura de perfil ou curso inválida."};if(payload.schemaVersion!=null&&(!Number.isInteger(payload.schemaVersion)||payload.schemaVersion<1||payload.schemaVersion>APP_SCHEMA_VERSION))return {valid:false,error:"Versão de progresso incompatível."};for(const key of ["stats","lessonProgress","srsByLesson","attemptRecords"])if(payload[key]!=null&&(typeof payload[key]!=="object"||Array.isArray(payload[key])))return {valid:false,error:`Campo ${key} inválido.`};return {valid:true};}
 function importProgressJSON(fileInput){
   const file = fileInput.files && fileInput.files[0];
   if(!file) return;
@@ -913,7 +915,7 @@ function importProgressJSON(fileInput){
     try{
       const parsed = JSON.parse(e.target.result);
       const validation=validateProgressImport(parsed);if(!validation.valid)throw new Error(validation.error);
-      if(parsed.profiles&&parsed.profiles[LOCAL_PROFILE_ID])await window.storage.set(PROFILE_STORAGE_KEY,JSON.stringify(parsed));
+      if(parsed.profiles&&parsed.profiles[activeProfileId()])await window.storage.set(PROFILE_STORAGE_KEY,JSON.stringify(parsed));
       else{await window.storage.delete(PROFILE_STORAGE_KEY);await window.storage.set(STORAGE_KEY, JSON.stringify(parsed));}
       alert("Progresso importado! Recarregando o app...");
       location.reload();
@@ -3245,8 +3247,51 @@ function micTestCapture(){
    EXPERIÊNCIA INTEGRADA V2
    Mantém todos os módulos anteriores e os conduz por uma única trilha.
 =========================================================== */
+const firebaseConfig={apiKey:"AIzaSyACk27zlBQVGob9DVzQUEXC46JRjgUD4GU",authDomain:"caderno-i.firebaseapp.com",projectId:"caderno-i",storageBucket:"caderno-i.firebasestorage.app",messagingSenderId:"193609567695",appId:"1:193609567695:web:b5b15203d2d0cf045556ba"};
+const cloud={ready:false,available:false,user:null,auth:null,db:null,api:{},status:"local",message:"Salvo neste dispositivo",timer:null,lastPayload:null,authOpen:false,authMode:"login",authError:"",authMessage:"",unsubscribe:null};
+function activeProfileId(){return cloud.user?cloud.user.uid:"local-default";}
+function profileStorageKey(profileId=activeProfileId()){return `caderno_ingles:${profileId}:practical-english:v3`;}
+function cloudDocRef(){return cloud.user&&cloud.db?cloud.api.doc(cloud.db,"users",cloud.user.uid,"courses","practical-english"):null;}
+function setSyncStatus(status,message){cloud.status=status;cloud.message=message||({synced:"Sincronizado",saving:"Sincronizando…",offline:"Salvo neste dispositivo",error:"Falha ao sincronizar"}[status]||"Salvo neste dispositivo");const el=document.getElementById("syncStatusText");if(el)el.textContent=cloud.message;}
+function firebaseErrorMessage(err){const code=err&&err.code||"";return ({"auth/invalid-credential":"E-mail ou senha incorretos.","auth/email-already-in-use":"Este e-mail já possui uma conta.","auth/weak-password":"Use uma senha com pelo menos 6 caracteres.","auth/invalid-email":"Digite um e-mail válido.","auth/too-many-requests":"Muitas tentativas. Aguarde um pouco e tente novamente.","auth/network-request-failed":"Sem conexão com a internet."})[code]||"Não foi possível concluir. Tente novamente.";}
+async function initFirebase(){
+  try{
+    const [appMod,authMod,fireMod]=await Promise.all([import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"),import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js")]);
+    const app=appMod.initializeApp(firebaseConfig);cloud.auth=authMod.getAuth(app);cloud.db=fireMod.getFirestore(app);cloud.api=Object.assign({},authMod,fireMod);cloud.available=true;
+    await new Promise(resolve=>{let stop=()=>{};stop=authMod.onAuthStateChanged(cloud.auth,async user=>{cloud.user=user||null;cloud.ready=true;stop();resolve();});});
+  }catch(e){console.warn("Firebase indisponível; modo local mantido.",e);cloud.ready=true;cloud.available=false;cloud.status="offline";cloud.message="Salvo neste dispositivo";}
+}
+function openAuth(mode="login"){cloud.authMode=mode;cloud.authError="";cloud.authMessage="";cloud.authOpen=true;render();}
+function closeAuth(){cloud.authOpen=false;cloud.authError="";render();}
+async function submitAuth(){
+  if(!cloud.available)return cloud.authError="Serviço de conta indisponível. Seu progresso continua salvo neste dispositivo.",render();
+  const email=(document.getElementById("authEmail")||{}).value||"",password=(document.getElementById("authPassword")||{}).value||"";cloud.authError="";cloud.authMessage="";
+  try{
+    if(cloud.authMode==="register"){const cred=await cloud.api.createUserWithEmailAndPassword(cloud.auth,email.trim(),password);await cloud.api.sendEmailVerification(cred.user);cloud.authMessage="Conta criada. Enviamos um link de verificação para seu e-mail.";}
+    else await cloud.api.signInWithEmailAndPassword(cloud.auth,email.trim(),password);
+    cloud.user=cloud.auth.currentUser;await adoptOrLoadCloudProgress();cloud.authOpen=false;render();
+  }catch(e){cloud.authError=firebaseErrorMessage(e);render();}
+}
+async function resetPassword(){const email=(document.getElementById("authEmail")||{}).value||"";if(!email.trim()){cloud.authError="Digite seu e-mail primeiro.";return render();}try{await cloud.api.sendPasswordResetEmail(cloud.auth,email.trim());cloud.authError="";cloud.authMessage="Enviamos as instruções para redefinir sua senha.";}catch(e){cloud.authError=firebaseErrorMessage(e);}render();}
+async function resendVerification(){try{if(cloud.user&&!cloud.user.emailVerified){await cloud.api.sendEmailVerification(cloud.user);alert("Novo e-mail de verificação enviado.");}}catch(e){alert(firebaseErrorMessage(e));}}
+async function logoutAccount(){if(!cloud.auth)return;await flushCloudSave();await cloud.api.signOut(cloud.auth);cloud.user=null;cloud.status="local";cloud.message="Salvo neste dispositivo";location.reload();}
+function extractPayload(raw,profileId){if(!raw)return null;try{const parsed=typeof raw==="string"?JSON.parse(raw):raw;return parsed.profiles&&parsed.profiles[profileId]&&parsed.profiles[profileId].courses?parsed.profiles[profileId].courses[COURSE_ID]:parsed;}catch(e){return null;}}
+async function adoptOrLoadCloudProgress(){
+  if(!cloud.user||!cloud.db)return;
+  try{
+    const ref=cloudDocRef(),snap=await cloud.api.getDoc(ref),accountRaw=localStorage.getItem(profileStorageKey(cloud.user.uid)),localRaw=accountRaw||localStorage.getItem(profileStorageKey("local-default"))||localStorage.getItem(STORAGE_KEY),localPayload=extractPayload(localRaw,accountRaw?cloud.user.uid:"local-default");
+    if(snap.exists()){const data=snap.data(),remote=data.payload||data,remoteTime=Number(data.clientUpdatedAt||0),localTime=Number(localPayload&&localPayload.clientUpdatedAt||0);if(!localPayload||remoteTime>=localTime){await storePayloadLocally(remote,cloud.user.uid);applySavedPayload(remote);}}
+    else if(localPayload){localPayload.clientUpdatedAt=Date.now();await cloud.api.setDoc(ref,{payload:localPayload,clientUpdatedAt:localPayload.clientUpdatedAt,updatedAt:cloud.api.serverTimestamp(),schemaVersion:APP_SCHEMA_VERSION},{merge:true});await storePayloadLocally(localPayload,cloud.user.uid);}
+    setSyncStatus("synced","Sincronizado");
+  }catch(e){console.warn("Não foi possível sincronizar agora",e);setSyncStatus("offline","Salvo neste dispositivo");}
+}
+async function storePayloadLocally(payload,profileId=activeProfileId()){const envelope={schemaVersion:APP_SCHEMA_VERSION,profiles:{[profileId]:{profileId,courses:{[COURSE_ID]:payload}}}};await window.storage.set(profileStorageKey(profileId),JSON.stringify(envelope),false);}
+function queueCloudSave(payload){cloud.lastPayload=payload;if(!cloud.user||!cloud.db)return;setSyncStatus("saving","Sincronizando…");clearTimeout(cloud.timer);cloud.timer=setTimeout(flushCloudSave,900);}
+async function flushCloudSave(){if(!cloud.lastPayload||!cloud.user||!cloud.db)return;const payload=cloud.lastPayload;cloud.lastPayload=null;try{await cloud.api.setDoc(cloudDocRef(),{payload,clientUpdatedAt:payload.clientUpdatedAt,updatedAt:cloud.api.serverTimestamp(),schemaVersion:APP_SCHEMA_VERSION},{merge:true});setSyncStatus("synced","Sincronizado");}catch(e){cloud.lastPayload=payload;console.warn("Sincronização adiada",e);setSyncStatus("offline","Salvo neste dispositivo");}}
+window.addEventListener("online",()=>{if(cloud.lastPayload)flushCloudSave();});
 const APP_SCHEMA_VERSION = 3;
-const LOCAL_PROFILE_ID="local-default",COURSE_ID="practical-english",PROFILE_STORAGE_KEY=`caderno_ingles:${LOCAL_PROFILE_ID}:${COURSE_ID}:v3`;
+const LOCAL_PROFILE_ID="local-default",COURSE_ID="practical-english";
+let PROFILE_STORAGE_KEY=profileStorageKey();
 /* PRIVACIDADE — EVOLUÇÃO FUTURA
    O protótipo é local e não representa uma conta segura. Uma versão com servidor deverá:
    autenticar o usuário; autorizar cada acesso no servidor; isolar dados por profileId;
@@ -3379,12 +3424,7 @@ function migrateSavedProgress(saved){
   return migrated;
 }
 
-async function loadProgress(){
-  try{
-    let res = await window.storage.get(PROFILE_STORAGE_KEY,false);
-    if(!res||!res.value)res=await window.storage.get(STORAGE_KEY,false);
-    if(res&&res.value){
-      const parsed=JSON.parse(res.value),raw=parsed.profiles&&parsed.profiles[LOCAL_PROFILE_ID]?parsed.profiles[LOCAL_PROFILE_ID].courses[COURSE_ID]:parsed;
+function applySavedPayload(raw){
       const saved=migrateSavedProgress(raw);
       state.unlockedGroups=saved.unlockedGroups||1; state.groupSeen=saved.groupSeen||state.groupSeen;
       state.stats=saved.stats||{}; state.currentGroup=Number.isInteger(saved.currentGroup)?saved.currentGroup:0;
@@ -3394,9 +3434,18 @@ async function loadProgress(){
       state.lesson.dialogueSeenIntro=saved.lessonDialogueSeenIntro||{};
       state.lessonExprProgress=saved.lessonExprProgress||{}; state.srs=saved.srs||{};state.srsByLesson=saved.srsByLesson||{};
       state.lessonProgress=saved.lessonProgress||{}; state.course=saved.course; state.helpStats=saved.helpStats; state.ui=saved.ui; state.moduleReinforcement=saved.moduleReinforcement;state.attemptRecords=saved.attemptRecords||{};
+}
+async function loadProgress(){
+  try{
+    PROFILE_STORAGE_KEY=profileStorageKey();
+    let res = await window.storage.get(PROFILE_STORAGE_KEY,false);
+    if((!res||!res.value)&&!cloud.user)res=await window.storage.get(STORAGE_KEY,false);
+    if(res&&res.value){
+      const parsed=JSON.parse(res.value),pid=activeProfileId(),raw=parsed.profiles&&parsed.profiles[pid]?parsed.profiles[pid].courses[COURSE_ID]:parsed;
+      applySavedPayload(raw);
     }
   }catch(e){ console.warn("Progresso anterior não pôde ser carregado",e); }
-  ensureV2State(); render();
+  ensureV2State();if(cloud.user)await adoptOrLoadCloudProgress();render();
 }
 
 async function saveProgress(){
@@ -3406,7 +3455,7 @@ async function saveProgress(){
     settings:state.settings,listenStats:state.listenStats,speakStats:state.speakStats,convoUnlockedScenarios:state.convo.unlockedScenarios,
     lessonDialogueSeenIntro:state.lesson.dialogueSeenIntro,lessonExprProgress:state.lessonExprProgress,srs:state.srs,srsByLesson:state.srsByLesson,
     course:state.course,lessonProgress:state.lessonProgress,helpStats:state.helpStats,ui:state.ui,moduleReinforcement:state.moduleReinforcement,attemptRecords:state.attemptRecords
-  };const envelope={schemaVersion:APP_SCHEMA_VERSION,profiles:{[LOCAL_PROFILE_ID]:{profileId:LOCAL_PROFILE_ID,courses:{[COURSE_ID]:payload}}}};await window.storage.set(PROFILE_STORAGE_KEY,JSON.stringify(envelope),false);await window.storage.set(STORAGE_KEY,JSON.stringify(payload),false);}catch(e){console.error("Falha ao salvar progresso",e);}
+  };payload.clientUpdatedAt=Date.now();const pid=activeProfileId();PROFILE_STORAGE_KEY=profileStorageKey(pid);await storePayloadLocally(payload,pid);if(!cloud.user)await window.storage.set(STORAGE_KEY,JSON.stringify(payload),false);queueCloudSave(payload);}catch(e){console.error("Falha ao salvar progresso",e);}
 }
 
 async function resetProgress(){
@@ -3442,7 +3491,8 @@ function lessonMetrics(lesson=activeLesson()){const records=Object.values(state.
 function currentCourseIndex(){const lesson=activeLesson();if(!state.course.dialogueCompleted)return 0;if((lesson.expressions||[]).some(e=>ensureLessonProgress(e.id)<TOTAL_EXPR_STAGES))return 1;if(!state.course.listeningCompleted)return 2;if(!state.course.speakingCompleted)return 3;if(!state.course.conversationCompleted)return 4;return Math.min(5,courseStepsFor(lesson).length-1);}
 function nextActivityLabel(){return courseStepsFor()[currentCourseIndex()].title;}
 
-function renderTopbar(){return `<div class="topbar"><div class="brand"><div class="stamp">${integratedProgress()}%</div><div><h1>Caderno de Inglês</h1><span>Inglês prático · evolução do A1 ao B2 🇮🇪</span></div></div><button class="settings-btn" aria-label="Abrir configurações" title="Configurações" onclick="openSettings()">⚙️</button></div>`;}
+function renderTopbar(){const label=cloud.user?(cloud.user.email||"Minha conta"):"Entrar";return `<div class="topbar"><div class="brand"><div class="stamp">${integratedProgress()}%</div><div><h1>Caderno de Inglês</h1><span>Inglês prático · evolução do A1 ao B2 🇮🇪</span></div></div><div class="top-actions"><button class="account-btn" onclick="openAuth('${cloud.user?'account':'login'}')" aria-label="Conta e sincronização"><b>${cloud.user?'👤 ':''}${esc(label)}</b><small id="syncStatusText">${esc(cloud.message)}</small></button><button class="settings-btn" aria-label="Abrir configurações" title="Configurações" onclick="openSettings()">⚙️</button></div></div>`;}
+function renderAuthModal(){if(!cloud.authOpen)return"";if(cloud.authMode==="account"&&cloud.user)return `<div class="modal-backdrop" onclick="if(event.target===this)closeAuth()"><section class="modal-panel auth-panel" role="dialog" aria-modal="true"><div class="modal-head"><h2>Minha conta</h2><button class="close-btn" aria-label="Fechar" onclick="closeAuth()">✕</button></div><div class="setting-row"><label>${esc(cloud.user.email||"Usuário")}</label><div class="sync-note ${cloud.status==='synced'?'ok':cloud.status==='error'?'error':''}">${esc(cloud.message)}</div>${!cloud.user.emailVerified?`<p class="lesson-sub">Seu e-mail ainda não foi confirmado.</p><button class="btn ghost" onclick="resendVerification()">Reenviar verificação</button>`:`<p class="lesson-sub">✅ E-mail verificado</p>`}</div><button class="btn ghost" onclick="exportProgressJSON()">⬇️ Exportar backup JSON</button><button class="btn danger-btn" style="margin-top:10px" onclick="logoutAccount()">Sair desta conta</button></section></div>`;const registering=cloud.authMode==="register";return `<div class="modal-backdrop" onclick="if(event.target===this)closeAuth()"><section class="modal-panel auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle"><div class="modal-head"><h2 id="authTitle">${registering?'Criar sua conta':'Entrar na sua conta'}</h2><button class="close-btn" aria-label="Fechar" onclick="closeAuth()">✕</button></div><p class="lesson-sub">Seu progresso continuará salvo neste dispositivo e também será sincronizado para você acessar em outros aparelhos.</p><div class="auth-fields"><input id="authEmail" type="email" autocomplete="email" placeholder="Seu e-mail"><input id="authPassword" type="password" autocomplete="${registering?'new-password':'current-password'}" minlength="6" placeholder="Sua senha (mínimo 6 caracteres)"></div>${cloud.authError?`<div class="auth-error" role="alert">${esc(cloud.authError)}</div>`:""}${cloud.authMessage?`<div class="auth-success">${esc(cloud.authMessage)}</div>`:""}<div class="auth-actions"><button class="btn" onclick="submitAuth()">${registering?'Criar conta':'Entrar'}</button><button class="btn ghost" onclick="openAuth('${registering?'login':'register'}')">${registering?'Já tenho uma conta':'Criar uma conta'}</button>${!registering?`<button class="link-btn" onclick="resetPassword()">Esqueci minha senha</button>`:""}</div><div class="sync-note">Se estiver sem internet, você pode estudar normalmente. A sincronização será retomada quando a conexão voltar.</div></section></div>`;}
 function renderTabs(){const area=state.screen==="revisar"||state.screen==="aula-revisao"?"revisar":state.screen==="progresso"?"progresso":"aprender";return `<nav class="bottom-nav" aria-label="Navegação principal"><button class="${area==='aprender'?'active':''}" onclick="goScreen('aprender')"><span>📚</span>Aprender</button><button class="${area==='revisar'?'active':''}" onclick="goScreen('revisar')"><span>🔁</span>Revisar</button><button class="${area==='progresso'?'active':''}" onclick="goScreen('progresso')"><span>📈</span>Progresso</button></nav>`;}
 function goScreen(id){cancelAudio();if(id!=="lesson-dialogue-v2"&&typeof stopAmbience==="function")stopAmbience();if(typeof releaseVoiceCapture==="function"&&voiceCapture.phase!=="idle")releaseVoiceCapture(false);state.ui.helpOpen=null;state.screen=id;render();}
 function openDialogueReview(){if(state.ui.dialogueReviewReturn)return;cancelAudio();if(typeof stopAmbience==="function")stopAmbience();state.ui.dialogueReviewReturn={screen:state.screen,scrollY:window.scrollY||0};state.screen="lesson-dialogue-v2";state.course.consultedStep=null;render();}
@@ -3602,9 +3652,9 @@ function captureDraft(){const el=document.activeElement;if(el&&(el.tagName==="IN
 function restoreDrafts(){Object.entries(state.ui.drafts||{}).forEach(([id,val])=>{const el=document.getElementById(id);if(el&&!el.disabled&&!el.value)el.value=val;});}
 
 function render(){ensureV2State();captureDraft();const app=document.getElementById("app");let html=renderTopbar()+renderPersistentLessonTools();
-  if(state.showRunBonus){app.innerHTML=html+renderRunBonus()+renderTabs()+renderSettingsModal();restoreDrafts();return;}
+  if(state.showRunBonus){app.innerHTML=html+renderRunBonus()+renderTabs()+renderSettingsModal()+renderAuthModal();restoreDrafts();return;}
   switch(state.screen){case"aprender":html+=renderDashboard();break;case"lesson-dialogue-v2":html+=renderDialogueV2();break;case"lesson-history":html+=renderLessonHistory();break;case"module-reinforcement":html+=renderModuleReinforcement();break;case"revisar":html+=renderReviewHub();break;case"progresso":html+=renderIntegratedProgress();break;case"praticar-intro":html+=renderPraticarIntro();break;case"praticar":case"revisar-praticando":case"desafio-praticando":html+=renderPraticando();break;case"grupo-completo":html+=renderGrupoCompleto();break;case"desafio":html+=renderDesafioIntro();break;case"desafio-fim":html+=renderDesafioFim();break;case"ouvir":html+=renderOuvirIntro();break;case"ouvir-frase":html+=renderOuvirFrase();break;case"ouvir-dialogo":html+=renderOuvirDialogo();break;case"falar":html+=renderFalarIntro();break;case"falar-pratica":html+=renderFalarPratica();break;case"conversar":html+=renderConversarIntro();break;case"conversar-jogando":html+=renderConversarJogando();break;case"mic-test":html+=renderMicTest();break;case"aula":html+=renderAulaIntro();break;case"aula-cena":html+=renderAulaCena();break;case"aula-expressao":html+=renderAulaExpressao();break;case"aula-comparacao":html+=renderAulaComparacao();break;case"aula-revisao":html+=renderAulaRevisao();break;default:state.screen="aprender";html+=renderDashboard();}
-  html+=renderTabs()+renderWordHelpModal()+renderErrorDetailModal()+renderSettingsModal();app.innerHTML=html;restoreDrafts();
+  html+=renderTabs()+renderWordHelpModal()+renderErrorDetailModal()+renderSettingsModal()+renderAuthModal();app.innerHTML=html;restoreDrafts();
 }
 function renderReviewHub(){const due=dueSrsExpressions(),weak=EXPR.filter(e=>state.stats[e.id]&&state.stats[e.id].wrong>0).sort((a,b)=>state.stats[b.id].wrong-state.stats[a.id].wrong).slice(0,8);const helped=Object.entries(state.helpStats.expressions).sort((a,b)=>b[1]-a[1]).slice(0,6);return `<div class="card"><div class="eyebrow">Revisar agora</div><h2 class="lesson-title">Revisões programadas</h2>${due.length?`<p class="lesson-sub">${due.length} expressão(ões) pronta(s) para revisar.</p><button class="btn" onclick="startReviewQueue()">Começar revisão →</button>`:`<div class="empty-state"><div class="big">✨</div>Nenhuma revisão vencida agora.</div>`}</div><div class="card"><div class="eyebrow">Erros recentes</div>${weak.length?weak.map(e=>`<div class="expr-row"><span>${esc(e.en)}</span><span class="mastery-pill low">${state.stats[e.id].wrong} erro(s)</span></div>`).join(""):"<p class='lesson-sub'>Nenhum erro recente.</p>"}</div><div class="card"><div class="eyebrow">Mais consultadas</div>${helped.length?helped.map(([k,n])=>`<div class="expr-row"><span>${esc(k)}</span><span class="mastery-pill mid">${n} ajuda(s)</span></div>`).join(""):"<p class='lesson-sub'>Nenhuma expressão consultada ainda.</p>"}</div>`;}
 function renderIntegratedProgress(){const pct=integratedProgress(),lesson=activeLesson(),steps=courseStepsFor(lesson),speaking=state.lessonProgress[lesson.id].speakingStatus,m=lessonMetrics(lesson);return `<div class="card"><div class="eyebrow">Conclusão e aprendizagem</div><h2 class="lesson-title">Módulo concluído: ${pct}%</h2><div class="hero-progress"><div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div><strong>${pct}%</strong></div><div class="stat-grid"><div class="stat-box"><div class="num">${m.performance}%</div><div class="lbl">desempenho nas avaliações</div></div><div class="stat-box"><div class="num">${m.persistent}</div><div class="lbl">conteúdos para reforçar</div></div><div class="stat-box"><div class="num">${m.independent}</div><div class="lbl">acertos sem ajuda</div></div><div class="stat-box"><div class="num">${m.pending}</div><div class="lbl">fala pendente</div></div></div><p class="lesson-sub">Concluir todas as atividades não significa dominar tudo. Erros persistentes ficam programados para revisão futura em contextos variados.</p><div class="transcript-box">Speaking: ${speaking==='completed'?'concluído':speaking==='pending-technical'?'pendente por problema técnico':speaking==='self-practice'?'praticado com apoio':'não iniciado'}</div><div class="lesson-path">${steps.map((s,i)=>`<div class="path-item ${i<currentCourseIndex()?'done':i===currentCourseIndex()?'current':'locked'}"><div class="path-icon">${i<currentCourseIndex()?'✅':s.icon}</div><div><div class="path-title">${esc(s.title)}</div><div class="path-sub">${esc(s.sub)}</div></div></div>`).join("")}</div></div><div class="card"><div class="eyebrow">Domínio por expressão</div>${(lesson.expressions||[]).map(e=>{const st=ensureSrs(e.id),p=ensureLessonProgress(e.id),label=p>=8&&st.noHelpStreak>=2?'dominado sem ajuda':p>=8?'concluído, ainda com apoio':p>=4?'compreendido':p?'em aprendizado':'não visto';return `<div class="expr-row"><span>${esc(e.text)}</span><span class="mastery-pill ${p>=8&&st.noHelpStreak>=2?'high':p?'mid':'low'}">${label}</span></div>`;}).join("")}</div>`;}
@@ -3630,7 +3680,7 @@ hydrateBuiltInLesson();
 if(window.speechSynthesis){
   window.speechSynthesis.onvoiceschanged = ()=>{};
 }
-loadProgress();
+(async function boot(){await initFirebase();await loadProgress();})();
 </script>
 </body>
 </html>
