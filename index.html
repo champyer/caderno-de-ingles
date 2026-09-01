@@ -1176,8 +1176,19 @@ function stopRecognition(){
 /* ---------------------------------------------------------
    COMPARAÇÃO DE FALA (transcrição × frase esperada)
 --------------------------------------------------------- */
+function normalizeSpeechComparison(s){
+  const contractions=[
+    ["i'm","i am"],["we're","we are"],["you're","you are"],["they're","they are"],
+    ["it's","it is"],["we've","we have"],["i've","i have"],["don't","do not"],
+    ["doesn't","does not"],["isn't","is not"],["can't","cannot"],["won't","will not"],
+    ["let's","let us"],["there's","there is"],["that's","that is"]
+  ];
+  let out=String(s||"").toLowerCase().replace(/[’‘]/g,"'").replace(/[-–—]+/g," ");
+  contractions.forEach(([shortForm,longForm])=>{out=out.replace(new RegExp(`(^|\\s)${shortForm.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}(?=\\s|$)`,"g"),(_,lead)=>lead+longForm);});
+  return out.replace(/[^a-z0-9'%\s]/g," ").replace(/\s+/g," ").trim();
+}
 function tokenize(s){
-  return normalize(s).split(" ").filter(Boolean);
+  return normalizeSpeechComparison(s).split(" ").filter(Boolean);
 }
 function compareSpeech(expected, recognized){
   const expTokens = tokenize(expected);
@@ -1738,6 +1749,23 @@ function renderLessonExprNav(lesson, currentId){
 const ADAPTIVE_ACTIVITY_META={explain:{label:"Estudar no contexto",purpose:"apresentar"},recognize:{label:"Reconhecer o significado",purpose:"reconhecer"},listen:{label:"Compreender ouvindo",purpose:"ouvir"},fill:{label:"Completar a frase",purpose:"recuperar"},speak:{label:"Falar a frase",purpose:"produzir"},context:{label:"Aplicar em nova situação",purpose:"aplicar"},participate:{label:"Participar do diálogo",purpose:"interagir"},review:{label:"Revisar sem ajuda",purpose:"revisar"}};
 function adaptiveActivityPlan(lesson,expr){const lp=state.lessonProgress[lesson.id]||(state.lessonProgress[lesson.id]={});lp.activityPlans=lp.activityPlans||{};if(lp.activityPlans[expr.id])return lp.activityPlans[expr.id];const s=ensureSrs(expr.id),idx=(lesson.expressions||[]).findIndex(e=>e.id===expr.id);let plan;if(s.wrong>0||s.hintsUsed>1)plan=["explain","listen","recognize","context","fill","speak","participate","review"];else if(idx%2)plan=["explain","listen","fill","recognize","speak","context","participate","review"];else plan=["explain","recognize","listen","fill","speak","context","participate","review"];lp.activityPlans[expr.id]=plan;return plan;}
 function adaptiveStageIndex(exprId,type){const found=findExpr(exprId);if(!found)return ensureLessonProgress(exprId);const index=adaptiveActivityPlan(found.lesson,found.expr).indexOf(type);return index<0?ensureLessonProgress(exprId):index;}
+function reconcileCompletedSpeechStages(lesson=activeLesson()){
+  for(const expr of lesson.expressions||[]){const plan=adaptiveActivityPlan(lesson,expr);let stage=ensureLessonProgress(expr.id);while(stage<plan.length){const kind=plan[stage]==="speak"?"expression":plan[stage]==="participate"?"participation":null,done=kind&&speechActivityRecord(kind,expr.id);if(!done||!done.concluida)break;stage++;}if(stage!==ensureLessonProgress(expr.id))state.lessonExprProgress[expr.id]=Math.min(TOTAL_EXPR_STAGES,stage);}
+}
+function plannedModuleActivities(lesson=activeLesson()){
+  reconcileCompletedSpeechStages(lesson);const items=[];
+  if(!state.course.dialogueCompleted)items.push({section:"dialogue",id:`${lesson.id}:dialogue`});
+  for(const expr of lesson.expressions||[]){const plan=adaptiveActivityPlan(lesson,expr),stage=ensureLessonProgress(expr.id);for(let i=stage;i<plan.length;i++){const type=plan[i],kind=type==="speak"?"expression":type==="participate"?"participation":null,record=kind&&speechActivityRecord(kind,expr.id);if(record&&(record.concluida||record.revisaoPendente))continue;items.push({section:"expression",expressionId:expr.id,type,index:i,id:`${lesson.id}:${expr.id}:${type}`});}}
+  if(state.moduleReinforcement.queue.length)items.push({section:"reinforcement",id:`${lesson.id}:reinforcement`});
+  if((lesson.listening||[]).length&&!state.course.listeningCompleted)items.push({section:"listening",id:`${lesson.id}:listening`});
+  if(!state.course.speakingCompleted)for(const phrase of lesson.speaking||[]){const record=speechActivityRecord("fluency",phrase.id);if(!record||(!record.concluida&&!record.revisaoPendente))items.push({section:"fluency",id:`${lesson.id}:${phrase.id}:fluency`,phraseId:phrase.id});}
+  if((lesson.conversation||[]).length&&!state.course.conversationCompleted)items.push({section:"conversation",id:`${lesson.id}:conversation`});
+  if(!state.course.comparisonCompleted)items.push({section:"comparison",id:`${lesson.id}:comparison`});
+  return items;
+}
+function nextPendingModuleActivity(lesson=activeLesson()){return plannedModuleActivities(lesson)[0]||null;}
+async function finishModuleFromPlan(lesson=activeLesson()){if(state.course.moduleCompleted){state.lesson.comparisonStep="summary";state.screen="aula-comparacao";render();return;}markModuleCompleted(lesson);state.lesson.comparisonStep="summary";state.answered=false;state.lastResult=null;state.selectedOption=null;state.micResult=null;state.dialogueRoleplayResult=null;state.micTranscript="";releaseVoiceCapture(false);await saveProgress();state.screen="aula-comparacao";render();}
+async function routeToNextPendingModuleActivity(){const lesson=activeLesson(),next=nextPendingModuleActivity(lesson);if(!next){await finishModuleFromPlan(lesson);return;}if(next.section==="dialogue")state.screen="lesson-dialogue-v2";else if(next.section==="expression"){state.lesson.focusExpressionId=next.expressionId;state.screen="aula-expressao";}else if(next.section==="reinforcement"){state.moduleReinforcement.returnScreen="integrated";state.screen="module-reinforcement";}else if(next.section==="listening"){const id=(lesson.listening[0]||{}).id;if(id){openListenSentence(id);return;}state.course.listeningCompleted=true;return routeToNextPendingModuleActivity();}else if(next.section==="fluency"){openFluencyPhrase(next.phraseId);return;}else if(next.section==="conversation"){const id=(lesson.conversation[0]||{}).id;if(id){startConvo(id);return;}state.course.conversationCompleted=true;return routeToNextPendingModuleActivity();}else{state.lesson.comparisonStep=state.course.comparisonCompleted?"summary":"intro";state.screen="aula-comparacao";}await saveProgress();render();}
 function renderExpressionStageBody(lesson,expr,line,activityType){
   switch(activityType){
     case "explain": return stageExplain(expr,line);
@@ -1751,7 +1779,7 @@ function renderExpressionStageBody(lesson,expr,line,activityType){
     default: return `<div class="feedback correct"><b>🎉 Expressão dominada!</b> "${esc(expr.text)}" já passou por reconhecimento, escuta, produção, novo contexto e participação no diálogo.</div>`;
   }
 }
-function advanceExprStage(exprId, opts={}){
+async function advanceExprStage(exprId, opts={}){
   const cur = ensureLessonProgress(exprId);
   if(opts.expectedStage!=null && cur!==opts.expectedStage) return;
   state.lessonExprProgress[exprId] = Math.min(TOTAL_EXPR_STAGES, cur+1);
@@ -1762,21 +1790,11 @@ function advanceExprStage(exprId, opts={}){
   state.dialogueRoleplayResult = null;
   if(state.lessonExprProgress[exprId] === TOTAL_EXPR_STAGES){
     scheduleSrs(exprId, {correct:true, usedHint: !!opts.usedHint});
-    const lesson = currentLesson();
-    const currentIndex = lesson.expressions.findIndex(e=>e.id===exprId);
-    const next = lesson.expressions.slice(currentIndex+1).find(e=>ensureLessonProgress(e.id)<TOTAL_EXPR_STAGES)
-      || lesson.expressions.find(e=>ensureLessonProgress(e.id)<TOTAL_EXPR_STAGES);
-    if(next) state.lesson.focusExpressionId = next.id;
-    else {
-      state.course.maxUnlocked=Math.max(state.course.maxUnlocked,2);if(!state.course.completedSteps.includes("expressions"))state.course.completedSteps.push("expressions");
-      saveProgress();
-      if(state.moduleReinforcement.queue.length){state.moduleReinforcement.returnScreen="integrated";state.screen="module-reinforcement";render();}
-      else{state.course.step="listening";const id=(activeLesson().listening[0]||{}).id;if(id)openListenSentence(id);else{state.screen="lesson-history";render();}}
-      return;
-    }
+    const lesson = activeLesson(),lp=state.lessonProgress[lesson.id];lp.expressionCompletions=lp.expressionCompletions||{};lp.expressionCompletions[exprId]=Object.assign({},lp.expressionCompletions[exprId]||{},{concluida:true,completedAt:lp.expressionCompletions[exprId]&&lp.expressionCompletions[exprId].completedAt||Date.now()});const allExpressionsDone=(lesson.expressions||[]).every(e=>ensureLessonProgress(e.id)>=adaptiveActivityPlan(lesson,e).length);
+    if(allExpressionsDone){state.course.maxUnlocked=Math.max(state.course.maxUnlocked,2);if(!state.course.completedSteps.includes("expressions"))state.course.completedSteps.push("expressions");}
   }
-  saveProgress();
-  render();
+  await saveProgress();
+  await routeToNextPendingModuleActivity();
 }
 
 function stageExplain(expr, line){
@@ -3295,7 +3313,7 @@ async function deleteAccountAndData(){if(!cloud.user||!confirm("Excluir sua cont
 function extractPayload(raw,profileId){if(!raw)return null;try{const parsed=typeof raw==="string"?JSON.parse(raw):raw;return parsed.profiles&&parsed.profiles[profileId]&&parsed.profiles[profileId].courses?parsed.profiles[profileId].courses[COURSE_ID]:parsed;}catch(e){return null;}}
 function mergeMonotonicProgress(preferred,local){if(!preferred)return local;if(!local)return preferred;const merged=Object.assign({},preferred),maxMap=(a,b)=>{const out=Object.assign({},a||{});Object.entries(b||{}).forEach(([k,v])=>out[k]=Math.max(Number(out[k]||0),Number(v||0)));return out;};merged.lessonExprProgress=maxMap(preferred.lessonExprProgress,local.lessonExprProgress);merged.lessonProgress=Object.assign({},preferred.lessonProgress||{});Object.entries(local.lessonProgress||{}).forEach(([lessonId,lp])=>{const current=merged.lessonProgress[lessonId]||{},course=Object.assign({},current.course||{});for(const flag of ["dialogueCompleted","listeningCompleted","speakingCompleted","conversationCompleted","comparisonCompleted","moduleCompleted"])course[flag]=!!(course[flag]||lp.course&&lp.course[flag]);course.maxUnlocked=Math.max(Number(course.maxUnlocked||0),Number(lp.course&&lp.course.maxUnlocked||0));course.completedSteps=[...new Set([...(course.completedSteps||[]),...(lp.course&&lp.course.completedSteps||[])])];merged.lessonProgress[lessonId]=Object.assign({},current,lp,{exprProgress:maxMap(current.exprProgress,lp.exprProgress),course});});if(local.course){merged.course=Object.assign({},preferred.course||{},local.course);for(const flag of ["dialogueCompleted","listeningCompleted","speakingCompleted","conversationCompleted","comparisonCompleted","moduleCompleted"])merged.course[flag]=!!(preferred.course&&preferred.course[flag]||local.course[flag]);merged.course.maxUnlocked=Math.max(Number(preferred.course&&preferred.course.maxUnlocked||0),Number(local.course.maxUnlocked||0));}merged.unlockedGroups=Math.max(Number(preferred.unlockedGroups||1),Number(local.unlockedGroups||1));return merged;}
 const mergeMonotonicProgressBase=mergeMonotonicProgress;
-mergeMonotonicProgress=function(preferred,local){const merged=mergeMonotonicProgressBase(preferred,local);Object.entries(local&&local.lessonProgress||{}).forEach(([lessonId,localLp])=>{const out=merged.lessonProgress[lessonId]||(merged.lessonProgress[lessonId]={}),remoteLp=preferred&&preferred.lessonProgress&&preferred.lessonProgress[lessonId]||{},activities=Object.assign({},remoteLp.speechActivities||{});Object.entries(localLp.speechActivities||{}).forEach(([key,value])=>{const old=activities[key]||{};activities[key]=old.concluida&&!value.concluida?old:Object.assign({},old,value,{concluida:!!(old.concluida||value.concluida),advanceCommitted:!!(old.advanceCommitted||value.advanceCommitted),aprovada:!!(old.aprovada||value.aprovada),comDificuldade:!!(old.comDificuldade||value.comDificuldade),revisaoPendente:!!(old.revisaoPendente||value.revisaoPendente),dominada:!!(old.dominada||value.dominada)});});out.speechActivities=activities;out.speechCoverage=Object.assign({},remoteLp.speechCoverage||{},localLp.speechCoverage||{});});return merged;};
+mergeMonotonicProgress=function(preferred,local){const merged=mergeMonotonicProgressBase(preferred,local);Object.entries(local&&local.lessonProgress||{}).forEach(([lessonId,localLp])=>{const out=merged.lessonProgress[lessonId]||(merged.lessonProgress[lessonId]={}),remoteLp=preferred&&preferred.lessonProgress&&preferred.lessonProgress[lessonId]||{},activities=Object.assign({},remoteLp.speechActivities||{});Object.entries(localLp.speechActivities||{}).forEach(([key,value])=>{const old=activities[key]||{};activities[key]=old.concluida&&!value.concluida?old:Object.assign({},old,value,{concluida:!!(old.concluida||value.concluida),advanceCommitted:!!(old.advanceCommitted||value.advanceCommitted),aprovada:!!(old.aprovada||value.aprovada),comDificuldade:!!(old.comDificuldade||value.comDificuldade),revisaoPendente:!!(old.revisaoPendente||value.revisaoPendente),dominada:!!(old.dominada||value.dominada)});});out.speechActivities=activities;out.speechCoverage=Object.assign({},remoteLp.speechCoverage||{},localLp.speechCoverage||{});out.expressionCompletions=Object.assign({},remoteLp.expressionCompletions||{},localLp.expressionCompletions||{});});return merged;};
 async function adoptOrLoadCloudProgress(){
   if(!cloud.user||!cloud.user.emailVerified||!cloud.db)return;
   try{
@@ -3418,7 +3436,8 @@ function ensureV2State(){
   state.lessonProgress = state.lessonProgress || {};
   const lesson=currentLesson(),lessonId=lesson&&lesson.id;
   if(lessonId){
-    state.lessonProgress[lessonId]=Object.assign({exprProgress:{},activityPlans:{},speechCoverage:{},speechActivities:{},speakingStatus:"not-started",knowledgeAttempts:{},persistentDifficulties:{},outcomes:{guided:0,supported:0,independent:0}},state.lessonProgress[lessonId]||{});
+    state.lessonProgress[lessonId]=Object.assign({exprProgress:{},expressionCompletions:{},activityPlans:{},speechCoverage:{},speechActivities:{},speakingStatus:"not-started",knowledgeAttempts:{},persistentDifficulties:{},outcomes:{guided:0,supported:0,independent:0}},state.lessonProgress[lessonId]||{});
+    state.lessonProgress[lessonId].expressionCompletions=state.lessonProgress[lessonId].expressionCompletions||{};
     state.lessonProgress[lessonId].speechCoverage=state.lessonProgress[lessonId].speechCoverage||{};
     state.lessonProgress[lessonId].speechActivities=state.lessonProgress[lessonId].speechActivities||{};
     state.lessonProgress[lessonId].course=Object.assign({step:"dialogue",dialogueCompleted:false,listeningCompleted:false,speakingCompleted:false,conversationCompleted:false,comparisonCompleted:false,moduleCompleted:false,maxUnlocked:0,completedSteps:[],consultedStep:null,extraAttempts:{},startedAt:Date.now()},state.lessonProgress[lessonId].course||{});
@@ -3641,7 +3660,7 @@ function speechActivityStore(){const lesson=activeLesson(),lp=state.lessonProgre
 function speechActivityRecord(kind,id){return speechActivityStore()[speechActivityKey(kind,id)]||null;}
 function speechCoverageKey(kind,id){return speechActivityKey(kind,id);}
 function speechCoverageStore(){const lesson=activeLesson(),lp=state.lessonProgress[lesson.id]||(state.lessonProgress[lesson.id]={});return lp.speechCoverage||(lp.speechCoverage={});}
-function baseSpeechCoverage(kind,id,target){const key=speechCoverageKey(kind,id),legacyKey=`${kind||"speech"}:${id||"current"}`,tokens=tokenize(target),store=speechCoverageStore(),saved=store[key]||store[legacyKey];if(saved&&saved.target===normalize(target)&&Array.isArray(saved.hits)){const migrated=Object.assign({},saved,{key,hits:[...saved.hits],rawTranscripts:[...(saved.rawTranscripts||[])]});if(!store[key])store[key]=migrated;return migrated;}return {key,target:normalize(target),tokens,hits:[],attempts:0,rawTranscripts:[],bestFullPct:0};}
+function baseSpeechCoverage(kind,id,target){const key=speechCoverageKey(kind,id),legacyKey=`${kind||"speech"}:${id||"current"}`,tokens=tokenize(target),normalizedTarget=normalizeSpeechComparison(target),store=speechCoverageStore(),candidate=store[key]||store[legacyKey],saved=candidate&&Array.isArray(candidate.hits)&&candidate.tokens&&candidate.tokens.join(" ")===tokens.join(" ")?candidate:null;if(saved&&Array.isArray(saved.hits)){const migrated=Object.assign({},saved,{key,target:normalizedTarget,tokens,hits:[...saved.hits],rawTranscripts:[...(saved.rawTranscripts||[])]});if(!store[key]||store[key].target!==normalizedTarget)store[key]=migrated;return migrated;}return {key,target:normalizedTarget,tokens,hits:[],attempts:0,rawTranscripts:[],bestFullPct:0};}
 function mergeSpeechCoverage(kind,id,target,heard,{commit=false}={}){const record=baseSpeechCoverage(kind,id,target),tokens=record.tokens.length?record.tokens:tokenize(target),recognized=tokenize(heard||""),hits=new Set(record.hits),hadPrior=hits.size>0;
   if(!hadPrior){const first=compareSpeech(target,heard||"");(first.matchedIndices||[]).forEach(i=>hits.add(i));record.bestFullPct=Math.max(record.bestFullPct||0,first.coverage||0);}
   else{let cursor=-1;for(const word of recognized){let pos=-1;for(let i=cursor+1;i<tokens.length;i++)if(!hits.has(i)&&tokens[i]===word){pos=i;break;}if(pos<0)for(let i=0;i<tokens.length;i++)if(!hits.has(i)&&tokens[i]===word){pos=i;break;}if(pos>=0){hits.add(pos);cursor=pos;}}}
@@ -3654,7 +3673,7 @@ function speechCoverageResult(kind,id,target,heard,spec={}){const coverage=merge
   return {expected:target,expTokens:coverage.tokens,recTokens:tokenize(heard||""),matched,matchedIndices:coverage.hits,missing,extra:[],pct,coverage:pct,coverageKey:coverage.key,attempts:coverage.attempts,rawTranscription:coverage.rawTranscripts.join(" | "),pendingPositions:missing,essentialMissing,chunksMissing,chunksRecognized:(spec.requiredChunks||[]).filter(c=>!chunksMissing.includes(normalize(c))),threshold:85,passed,correct:passed,message:passed?"Sua fala foi compreendida.":"Pratique as palavras que ainda faltam."};
 }
 function consolidatedSpeechResult(kind,id,target,fallback={}){const c=baseSpeechCoverage(kind,id,target),hits=new Set(c.hits||[]),matched=c.tokens.filter((_,i)=>hits.has(i)),missing=c.tokens.filter((_,i)=>!hits.has(i)),pct=Math.round((c.tokens.length?hits.size/c.tokens.length:0)*100);return Object.assign({},fallback,{expected:target,expTokens:c.tokens,matched,matchedIndices:[...hits],missing,pendingPositions:missing,pct:hits.size===c.tokens.length&&c.tokens.length?100:pct,coverage:hits.size===c.tokens.length&&c.tokens.length?100:pct,attempts:c.attempts||0,passed:(hits.size/c.tokens.length)>=.85,correct:(hits.size/c.tokens.length)>=.85});}
-function voiceProgress(target,heard,kind=voiceCapture.kind,id=voiceCapture.id){if(!kind){const saved=Object.values(speechCoverageStore()).find(v=>v.target===normalize(target));if(saved){const hits=new Set(saved.hits||[]),tokens=saved.tokens||tokenize(target);return {tokens,hits,pct:Math.round((tokens.length?hits.size/tokens.length:0)*100),count:hits.size};}}const c=mergeSpeechCoverage(kind,id,target,heard||"",{commit:false}),hits=new Set(c.hits);return {tokens:c.tokens,hits,pct:c.coveragePct,count:hits.size};}
+function voiceProgress(target,heard,kind=voiceCapture.kind,id=voiceCapture.id){if(!kind){const normalizedTarget=normalizeSpeechComparison(target),saved=Object.values(speechCoverageStore()).find(v=>v.target===normalizedTarget);if(saved){const hits=new Set(saved.hits||[]),tokens=saved.tokens||tokenize(target);return {tokens,hits,pct:Math.round((tokens.length?hits.size/tokens.length:0)*100),count:hits.size};}}const c=mergeSpeechCoverage(kind,id,target,heard||"",{commit:false}),hits=new Set(c.hits);return {tokens:c.tokens,hits,pct:c.coveragePct,count:hits.size};}
 function renderLiveVoiceProgress(target,heard,kind=voiceCapture.kind,id=voiceCapture.id){const p=voiceProgress(target,heard,kind,id);return `<div class="voice-words">${p.tokens.map((w,i)=>`<span class="voice-word ${p.hits.has(i)?'hit':''}">${p.hits.has(i)?'✓ ':''}${esc(w)}</span>`).join("")}</div><div class="voice-meter"><span style="width:${p.pct}%"></span></div><div class="lesson-sub"><b>${p.count}/${p.tokens.length}</b> palavras reconhecidas · <b>${p.pct}%</b> da frase</div>`;}
 function updateLiveVoiceProgress(){const el=document.getElementById("liveVoiceProgress");if(el)el.innerHTML=renderLiveVoiceProgress(voiceCapture.target,voiceCapture.transcript);const tx=document.getElementById("liveTranscript");if(tx)tx.textContent=voiceCapture.transcript||"Ouvindo…";}
 async function startVoiceCapture(kind,id,target){if(voiceCapture.phase!=="idle"&&voiceCapture.phase!=="error")return;releaseVoiceCapture(false);Object.assign(voiceCapture,{phase:"starting",kind,id,target,chunks:[],transcript:"",seconds:0,error:null,mediaAvailable:false});render();
@@ -3683,9 +3702,9 @@ function useVoiceCapture(){
 function scheduleSpeechReview(kind,id,result){const reviewId=(activeLesson().expressions||[]).find(e=>String(e.id)===String(id))?.id||id,s=ensureSrs(reviewId),missing=result.missing||tokenize(result.expected||"");s.missingSpeechWords=[...new Set([...(s.missingSpeechWords||[]),...missing])];s.nextReview=Math.min(s.nextReview||Infinity,Date.now()+24*60*60*1000);s.due=true;}
 function markSpeechCompleted(kind,id,result,{approved=false,difficulty=false,pendingReview=false}={}){const key=speechActivityKey(kind,id),store=speechActivityStore(),previous=store[key]||{};store[key]=Object.assign({},previous,{lessonId:activeLesson().id,expressionId:id,activityType:kind,context:speechActivityContext(kind),concluida:true,aprovada:!!approved,comDificuldade:!!difficulty,revisaoPendente:!!pendingReview,dominada:false,pct:Number(result.pct||0),missing:[...(result.missing||[])],completedAt:previous.completedAt||Date.now(),advanceCommitted:previous.advanceCommitted||false});return store[key];}
 async function completeSpeechAndAdvance(kind,id,{forceDifficulty=false,noTranscript=false}={}){const existing=speechActivityRecord(kind,id);if(existing&&existing.advanceCommitted)return;const target=kind==="participation"?lineById(findExpr(id).lesson,findExpr(id).expr.lineId).en:kind==="expression"?lineById(findExpr(id).lesson,findExpr(id).expr.lineId).en:((activeLesson().speaking||[]).find(x=>String(x.id)===String(id))||{}).en||voiceCapture.target||"",fallback=kind==="participation"?state.dialogueRoleplayResult:state.micResult,result=noTranscript?{expected:target,pct:0,missing:tokenize(target),passed:false}:consolidatedSpeechResult(kind,id,target,fallback||{}),approved=!forceDifficulty&&!noTranscript&&result.pct>=85,difficulty=!approved,pendingReview=difficulty||(result.missing||[]).length>0,record=markSpeechCompleted(kind,id,result,{approved,difficulty,pendingReview});if(pendingReview)scheduleSpeechReview(kind,id,result);record.advanceCommitted=true;state.lessonProgress[activeLesson().id].speakingStatus=difficulty?"practiced-with-difficulty":"completed";recordAttempt(id,difficulty?"practiced-with-difficulty":"completed","guided",{pct:result.pct,missing:result.missing||[],activityKey:speechActivityKey(kind,id)});releaseVoiceCapture(false);state.micResult=null;state.dialogueRoleplayResult=null;state.micTranscript="";
-  if(kind==="expression")advanceExprStage(id,{expectedStage:adaptiveStageIndex(id,"speak"),usedHint:true});
-  else if(kind==="participation")advanceExprStage(id,{expectedStage:adaptiveStageIndex(id,"participate"),usedHint:true});
-  else if(kind==="fluency")advanceSpeakStage(id);
+  if(kind==="expression")await advanceExprStage(id,{expectedStage:adaptiveStageIndex(id,"speak"),usedHint:true});
+  else if(kind==="participation")await advanceExprStage(id,{expectedStage:adaptiveStageIndex(id,"participate"),usedHint:true});
+  else if(kind==="fluency"){const lesson=activeLesson(),allDone=(lesson.speaking||[]).every(p=>{const r=speechActivityRecord("fluency",p.id);return r&&(r.concluida||r.revisaoPendente);});if(allDone){state.course.speakingCompleted=true;state.course.maxUnlocked=Math.max(state.course.maxUnlocked,4);if(!state.course.completedSteps.includes("speaking"))state.course.completedSteps.push("speaking");}await saveProgress();await routeToNextPendingModuleActivity();}
   else{await saveProgress();render();}
 }
 function skipSpeakingTechnical(kind,id){
