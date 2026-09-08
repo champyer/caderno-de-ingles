@@ -877,11 +877,9 @@ const CONVO_SCENARIOS = [
    ESTADO
 --------------------------------------------------------- */
 /* ---------------------------------------------------------
-   VERSÃO INDEPENDENTE (index.html): armazenamento local
-   Este bloco usa armazenamento local do navegador,
-   mantendo uma interface única (window.storage),
-   então o resto do app (loadProgress/saveProgress/etc.)
-   funciona sem nenhuma alteração de lógica.
+   CAMADA DE ARMAZENAMENTO LOCAL
+   O progresso é salvo primeiro no navegador e depois
+   sincronizado com a conta pelo módulo Firebase abaixo.
 --------------------------------------------------------- */
 window.storage = {
   async get(key){
@@ -1040,62 +1038,6 @@ function ensureStat(id){
   return state.stats[id];
 }
 
-async function loadProgress(){
-  try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    if(res && res.value){
-      const saved = JSON.parse(res.value);
-      state.unlockedGroups = saved.unlockedGroups || 1;
-      state.groupSeen = saved.groupSeen || state.groupSeen;
-      state.stats = saved.stats || {};
-      state.currentGroup = saved.currentGroup || 0;
-      if(saved.settings) state.settings = Object.assign(state.settings, saved.settings);
-      if(saved.listenStats) state.listenStats = saved.listenStats;
-      if(saved.speakStats) state.speakStats = saved.speakStats;
-      if(saved.convoUnlockedScenarios) state.convo.unlockedScenarios = saved.convoUnlockedScenarios;
-      if(saved.lessonDialogueSeenIntro) state.lesson.dialogueSeenIntro = saved.lessonDialogueSeenIntro;
-      if(saved.lessonExprProgress) state.lessonExprProgress = saved.lessonExprProgress;
-      if(saved.srs) state.srs = saved.srs;
-    }
-  }catch(e){ /* sem progresso salvo ainda */ }
-  render();
-}
-
-async function saveProgress(){
-  try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify({
-      unlockedGroups: state.unlockedGroups,
-      groupSeen: state.groupSeen,
-      stats: state.stats,
-      currentGroup: state.currentGroup,
-      settings: state.settings,
-      listenStats: state.listenStats,
-      speakStats: state.speakStats,
-      convoUnlockedScenarios: state.convo.unlockedScenarios,
-      lessonDialogueSeenIntro: state.lesson.dialogueSeenIntro,
-      lessonExprProgress: state.lessonExprProgress,
-      srs: state.srs,
-    }), false);
-  }catch(e){ console.error("Falha ao salvar progresso", e); }
-}
-
-async function resetProgress(){
-  if(!confirm("Isso vai apagar todo o seu progresso salvo (incluindo listening, speaking e conversas). Tem certeza?")) return;
-  state.unlockedGroups = 1;
-  state.groupSeen = [false,false,false,false,false,false,false,false];
-  state.stats = {};
-  state.currentGroup = 0;
-  state.listenStats = {};
-  state.speakStats = {};
-  state.convo.unlockedScenarios = 1;
-  state.lesson.dialogueSeenIntro = {};
-  state.lessonExprProgress = {};
-  state.srs = {};
-  state.screen = "aprender";
-  await saveProgress();
-  render();
-}
-
 /* ---------------------------------------------------------
    ÁUDIO (TTS do navegador)
 --------------------------------------------------------- */
@@ -1109,37 +1051,6 @@ function getVoiceForVariety(variety){
   }
   return voices.find(v=>v.lang && v.lang.toLowerCase().includes('en-us'))
     || voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('en'));
-}
-
-// speak(text, opts): opts = {variety:'us'|'uk', rate:0.5-1.1, onstart, onend}
-function speak(text, opts={}){
-  try{
-    if(!('speechSynthesis' in window)) return false;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    const variety = opts.variety || (state.settings && state.settings.variety) || "us";
-    u.lang = variety==="uk" ? "en-IE" : "en-US";
-    const pref = getVoiceForVariety(variety);
-    if(pref) u.voice = pref;
-    u.rate = opts.rate || 0.92;
-    if(opts.onstart) u.onstart = opts.onstart;
-    if(opts.onend) u.onend = opts.onend;
-    u.onerror = opts.onend || (()=>{});
-    window.speechSynthesis.speak(u);
-    return true;
-  }catch(e){ console.error(e); return false; }
-}
-
-function speakSequence(items, onEachStart, onAllDone){
-  // items: [{text, variety, rate}]
-  let i = 0;
-  function next(){
-    if(i >= items.length){ if(onAllDone) onAllDone(); return; }
-    const it = items[i];
-    if(onEachStart) onEachStart(i);
-    speak(it.text, {variety: it.variety, rate: it.rate, onend: ()=>{ i++; next(); }});
-  }
-  next();
 }
 
 /* ---------------------------------------------------------
@@ -1863,25 +1774,6 @@ function answerFillBlank(exprId, picked){
   saveProgress();
   render();
 }
-function stagePronounce(expr, line){
-  const chunks = line.en.replace(/\.$/,"").split(" ");
-  let html = `<div class="chunk-row">${chunks.map(w=>`<button class="chunk-btn" onclick="speak(decodeArg('${encodeArg(w)}'))">${esc(w)}</button>`).join("")}</div>
-  <button class="btn ghost" onclick="speak(decodeArg('${encodeArg(line.en)}'),{rate:0.6})">🐢 Ouvir devagar</button>`;
-  if(!supportsRecognition()){
-    html += `<div class="no-speech-warning">O microfone ou o reconhecimento de fala não está disponível. Esta atividade ficará pendente e não contará como speaking.</div>
-    <button class="btn" onclick="skipSpeakingTechnical('expression','${expr.id}')">Continuar com speaking pendente</button>`;
-  } else {
-    html += `<button class="mic-btn ${state.micListening?'listening':''}" onclick="micPronounceCapture('${expr.id}')">🎤 ${state.micListening?'Ouvindo...':'Segure ou clique para falar'}</button>`;
-  }
-  if(state.micResult){
-    const r = state.micResult;
-    html += `<div class="feedback ${r.pct>=75?'correct':'incorrect'}"><b>${esc(r.message)}</b></div>
-    `;
-    if(r.pct>=75) html += `<button class="btn" onclick="state.micResult=null; advanceExprStage('${expr.id}', {expectedStage:adaptiveStageIndex('${expr.id}','speak')})">Continuar</button>`;
-    else html += `<button class="btn ghost" onclick="state.micResult=null; render();">Tentar de novo</button>`;
-  }
-  return html;
-}
 function submitPronounce(id, text){
   const l2 = lineById(currentLesson(), findExpr(id).expr.lineId);
   state.micResult = compareSpeech(l2.en, text);
@@ -1938,45 +1830,6 @@ function micNewContextCapture(exprId){
     render();
   }, ()=>{ state.micListening=false; render(); });
 }
-function stageParticipate(lesson, expr, line){
-  const level = state.lesson.participateLevel[expr.id] || 0;
-  const idx = lesson.dialogue.findIndex(t=>t.id===line.id);
-  const prevLine = idx>0 ? lesson.dialogue[idx-1] : null;
-  const levelLabels = ["Resposta completa visível","Só palavras de apoio","Sem pronúncia aproximada","Sem tradução","Resposta livre"];
-  let html = "";
-  if(prevLine){
-    html += `<div class="dialogue-turn ${prevLine.speaker!=='funcionario'?'cliente':''}">
-      <div class="speaker-tag">${characterOf(lesson,prevLine.speaker).icon}</div>
-      <div class="dialogue-bubble"><div class="expr-en" style="font-size:15px;">${esc(prevLine.en)}</div></div>
-    </div>
-    <button class="reveal-btn" onclick='speak(${JSON.stringify(prevLine.en)},{variety:"${characterOf(lesson,prevLine.speaker).variety}"})'>🔊 Ouvir</button>`;
-  }
-  html += `<div class="eyebrow" style="margin-top:12px;">${esc(levelLabels[level])} — sua vez de responder como ${esc(characterOf(lesson,line.speaker).name)}</div>`;
-  if(level===0) html += `<div class="expr-en" style="font-size:15px;">${esc(line.en)}</div>`;
-  if(level===1) html += `<div class="expr-en" style="font-size:15px;opacity:.7;">${esc(line.en.split(" ").slice(0,3).join(" "))} ...</div>`;
-  if(level<=1) html += `<div class="pron">/ ${esc(line.pron)} /</div>`;
-  if(level<=2 && level!==3) html += level<=1 ? "" : "";
-  if(level<3 && level>=2) { /* sem pron, com tradução ainda */ }
-  if(level<3) html += `<div class="pt-translation">${esc(line.pt)}</div>`;
-
-  if(!supportsRecognition()){
-    html += `<div class="no-speech-warning">O microfone ou o reconhecimento de fala não está disponível. A participação oral ficará pendente.</div>
-    <button class="btn" onclick="skipSpeakingTechnical('participation','${expr.id}')">Continuar com speaking pendente</button>`;
-  } else {
-    html += `<button class="mic-btn ${state.micListening?'listening':''}" onclick="micParticipateCapture('${expr.id}')">🎤 ${state.micListening?'Ouvindo...':'Clique para falar'}</button>`;
-  }
-  if(state.dialogueRoleplayResult){
-    const r = state.dialogueRoleplayResult;
-    html += `<div class="transcript-box">Você disse: "${esc(r.heard)}"</div>
-    <div class="feedback ${r.correct?'correct':'incorrect'}"><b>${r.correct?'✅ Compreensível!':'💡 Quase lá'}</b>${esc(r.message)}</div>`;
-    if(r.correct){
-      html += `<button class="btn" onclick="advanceParticipateLevel('${expr.id}')">Continuar →</button>`;
-    } else {
-      html += `<button class="btn ghost" onclick="state.dialogueRoleplayResult=null; render();">Tentar de novo</button>`;
-    }
-  }
-  return html;
-}
 function micParticipateCapture(exprId){
   state.micListening = true;
   render();
@@ -2022,13 +1875,6 @@ function stageReviewLight(expr, line){
   }
   return html;
 }
-function answerReviewLight(exprId, text){
-  const expr = findExpr(exprId).expr;
-  state.answered = true;
-  state.lastResult = containsKeyPhrase(text, expr.pt.split(" ").slice(0,2).join(" ")) || (text||"").trim().length>3;
-  render();
-}
-
 /* --- Comparação início × final --- */
 function renderAulaComparacao(){
   const lesson = currentLesson();
@@ -2076,52 +1922,6 @@ function playComparisonReplay(){
   const items = lesson.dialogue.map(t=>{const character=characterOf(lesson,t.speaker);return {text:t.en,audioUrl:t.audioUrl,character,variety:character.variety,rate:mode==="audio"?1.0:character.rate||0.9};});
   speakSequence(items, (i)=>{ state.lesson.dialoguePlayIndex=i; render(); }, ()=>{ state.lesson.dialoguePlayIndex=-1; restoreAmbience();render(); });
 }
-function renderComparisonQuestions(lesson){
-  const questions = [
-    {q:"O cliente estava com pouco de qual produto?", opts:["Leite","Pão","Ovos"], correct:"Leite"},
-    {q:"Onde fica o corredor de laticínios?", opts:["Perto da entrada","Perto do fundo da loja","No caixa"], correct:"Perto do fundo da loja"},
-    {q:"Como o cliente pagou?", opts:["No caixa de autoatendimento","Com um funcionário","Não pagou"], correct:"No caixa de autoatendimento"},
-  ];
-  state.comparisonQuestions = state.comparisonQuestions || questions.map(()=>null);
-  let html = `<div class="eyebrow">Perguntas rápidas sobre a situação</div>`;
-  questions.forEach((q,i)=>{
-    html += `<div style="margin-bottom:14px;">
-      <div class="prompt" style="font-size:15px;">${esc(q.q)}</div>
-      <div class="options">${q.opts.map(o=>{
-        let cls="opt-btn";
-        if(state.comparisonQuestions[i]!=null){
-          if(o===q.correct) cls+=" correct";
-          else if(o===state.comparisonQuestions[i] && o!==q.correct) cls+=" incorrect";
-        }
-        return `<button type="button" class="${cls}" ${state.comparisonQuestions[i]!=null?'disabled':''} onclick="answerComparisonQ(${i}, decodeArg('${encodeArg(o)}'))">${esc(o)}</button>`;
-      }).join("")}</div>
-    </div>`;
-  });
-  const allAnswered = state.comparisonQuestions.every(a=>a!=null);
-  if(allAnswered){
-    html += `<button class="btn" onclick="state.lesson.comparisonStep='summary'; render();">Ver resumo da evolução →</button>`;
-  }
-  return html;
-}
-function answerComparisonQ(i, val){
-  state.comparisonQuestions[i] = val;
-  render();
-}
-function renderComparisonSummary(lesson){
-  const mastered = lesson.expressions.filter(e=>ensureLessonProgress(e.id)>=TOTAL_EXPR_STAGES);
-  const inProgress = lesson.expressions.filter(e=>ensureLessonProgress(e.id)<TOTAL_EXPR_STAGES);
-  return `
-  <div class="stat-grid">
-    <div class="stat-box"><div class="num">${mastered.length}/${lesson.expressions.length}</div><div class="lbl">expressões dominadas</div></div>
-    <div class="stat-box"><div class="num">${state.comparisonQuestions.filter((a,i)=>a).length}</div><div class="lbl">perguntas respondidas</div></div>
-  </div>
-  <div class="eyebrow">Expressões usadas corretamente</div>
-  <div class="transcript-box">${mastered.map(e=>`• ${esc(e.text)}`).join("<br>") || "Continue praticando!"}</div>
-  <div class="eyebrow" style="margin-top:10px;">Pontos para revisar</div>
-  <div class="transcript-box">${inProgress.map(e=>`• ${esc(e.text)}`).join("<br>") || "Nenhum — muito bem!"}</div>
-  <button class="btn" style="margin-top:14px;" onclick="state.screen='aula'; render();">Voltar para as aulas</button>`;
-}
-
 /* --- Fila de revisão espaçada (Revisões de hoje) --- */
 function startReviewQueue(){
   state.reviewQueue = dueSrsExpressions();
@@ -2171,59 +1971,6 @@ function gradeReview(exprId, easy){
 function esc(s){ return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 function encodeArg(value){ return encodeURIComponent(JSON.stringify(value)).replace(/'/g,"%27"); }
 function decodeArg(value){ return JSON.parse(decodeURIComponent(value)); }
-
-function renderTopbar(){
-  const totalSeen = Object.values(state.stats).reduce((a,s)=>a+s.seen,0);
-  const totalCorrect = Object.values(state.stats).reduce((a,s)=>a+s.correct,0);
-  const pct = totalSeen ? Math.round((totalCorrect/totalSeen)*100) : 0;
-  return `
-  <div class="topbar">
-    <div class="brand">
-      <div class="stamp">${pct}%</div>
-      <div>
-        <h1>Caderno de Inglês</h1>
-        <span>Inglês prático · evolução do A1 ao B2 🇮🇪</span>
-      </div>
-    </div>
-    <button class="reset-btn" onclick="resetProgress()">Apagar todo o progresso</button>
-  </div>`;
-}
-
-function renderTabs(){
-  const tabs = [
-    {id:"aula", label:"Aula: Diálogo"},
-    {id:"aprender", label:"Aprender"},
-    {id:"praticar", label:"Praticar", disabled: false},
-    {id:"ouvir", label:"Ouvir e entender"},
-    {id:"falar", label:"Falar e praticar"},
-    {id:"conversar", label:"Conversar no supermercado"},
-    {id:"revisar", label:"Revisar erros"},
-    {id:"desafio", label:"Desafio final", disabled: state.unlockedGroups < 3},
-    {id:"progresso", label:"Meu progresso"},
-  ];
-  const activeGroup = ["ouvir","ouvir-frase","ouvir-dialogo"].includes(state.screen) ? "ouvir"
-    : ["falar","falar-pratica"].includes(state.screen) ? "falar"
-    : ["conversar","conversar-jogando","mic-test"].includes(state.screen) ? "conversar"
-    : ["aula","aula-cena","aula-expressao","aula-comparacao","aula-revisao"].includes(state.screen) ? "aula"
-    : state.screen;
-  return `<nav class="tabs">${tabs.map(t=>`
-    <button class="${activeGroup===t.id?'active':''}" ${t.disabled?'disabled':''}
-      onclick="goScreen('${t.id}')">${t.label}</button>`).join("")}</nav>`;
-}
-
-function goScreen(id){
-  if(id==="praticar"){
-    // ir para a tela de "iniciar prática" do grupo atual mais recente não concluído
-    state.screen = "praticar-intro";
-  } else if(id==="revisar"){
-    state.screen = "revisar";
-  } else if(id==="desafio"){
-    state.screen = "desafio";
-  } else {
-    state.screen = id;
-  }
-  render();
-}
 
 function renderGroupPills(){
   let html = `<div class="group-pill-row">`;
@@ -2535,49 +2282,8 @@ function renderRunBonus(){
   </div>`;
 }
 
-function render(){
-  const app = document.getElementById("app");
-  let html = renderTopbar();
-
-  if(state.showRunBonus){
-    app.innerHTML = html + renderRunBonus();
-    return;
-  }
-
-  html += renderTabs();
-
-  switch(state.screen){
-    case "aprender": html += renderAprender(); break;
-    case "praticar-intro": html += renderPraticarIntro(); break;
-    case "praticar": html += renderPraticando(); break;
-    case "grupo-completo": html += renderGrupoCompleto(); break;
-    case "revisar": html += renderRevisar(); break;
-    case "revisar-praticando": html += renderPraticando(); break;
-    case "desafio": html += renderDesafioIntro(); break;
-    case "desafio-praticando": html += renderPraticando(); break;
-    case "desafio-fim": html += renderDesafioFim(); break;
-    case "progresso": html += renderProgresso(); break;
-    case "ouvir": html += renderOuvirIntro(); break;
-    case "ouvir-frase": html += renderOuvirFrase(); break;
-    case "ouvir-dialogo": html += renderOuvirDialogo(); break;
-    case "falar": html += renderFalarIntro(); break;
-    case "falar-pratica": html += renderFalarPratica(); break;
-    case "conversar": html += renderConversarIntro(); break;
-    case "conversar-jogando": html += renderConversarJogando(); break;
-    case "mic-test": html += renderMicTest(); break;
-    case "aula": html += renderAulaIntro(); break;
-    case "aula-cena": html += renderAulaCena(); break;
-    case "aula-expressao": html += renderAulaExpressao(); break;
-    case "aula-comparacao": html += renderAulaComparacao(); break;
-    case "aula-revisao": html += renderAulaRevisao(); break;
-    default: html += renderAprender();
-  }
-
-  app.innerHTML = html;
-}
-
 /* ===========================================================
-   NOVO: SUPORTE / CONFIGURAÇÕES COMPARTILHADAS
+   SUPORTE E CONFIGURAÇÕES COMPARTILHADAS
 =========================================================== */
 function renderSupportSettings(){
   const levels = [
@@ -3317,9 +3023,8 @@ async function logoutAccount(){if(!cloud.auth)return;await flushCloudSave();canc
 async function useDifferentEmail(){if(cloud.auth)await cloud.api.signOut(cloud.auth);cloud.user=null;cloud.authMode="login";cloud.authError="";cloud.authMessage="";render();}
 async function deleteAccountAndData(){if(!cloud.user||!confirm("Excluir sua conta e todo o progresso sincronizado? Esta ação não pode ser desfeita."))return;try{cloud.authBusy=true;const uid=cloud.user.uid;await cloud.api.deleteDoc(cloudDocRef());await cloud.api.deleteUser(cloud.user);localStorage.removeItem(profileStorageKey(uid));cloud.user=null;cloud.authMode="login";cloud.authMessage="Conta e progresso excluídos.";}catch(e){cloud.authError=firebaseErrorMessage(e);}finally{cloud.authBusy=false;render();}}
 function extractPayload(raw,profileId){if(!raw)return null;try{const parsed=typeof raw==="string"?JSON.parse(raw):raw;return parsed.profiles&&parsed.profiles[profileId]&&parsed.profiles[profileId].courses?parsed.profiles[profileId].courses[COURSE_ID]:parsed;}catch(e){return null;}}
-function mergeMonotonicProgress(preferred,local){if(!preferred)return local;if(!local)return preferred;const merged=Object.assign({},preferred),maxMap=(a,b)=>{const out=Object.assign({},a||{});Object.entries(b||{}).forEach(([k,v])=>out[k]=Math.max(Number(out[k]||0),Number(v||0)));return out;};merged.lessonExprProgress=maxMap(preferred.lessonExprProgress,local.lessonExprProgress);merged.lessonProgress=Object.assign({},preferred.lessonProgress||{});Object.entries(local.lessonProgress||{}).forEach(([lessonId,lp])=>{const current=merged.lessonProgress[lessonId]||{},course=Object.assign({},current.course||{});for(const flag of ["dialogueCompleted","listeningCompleted","speakingCompleted","conversationCompleted","comparisonCompleted","moduleCompleted"])course[flag]=!!(course[flag]||lp.course&&lp.course[flag]);course.maxUnlocked=Math.max(Number(course.maxUnlocked||0),Number(lp.course&&lp.course.maxUnlocked||0));course.completedSteps=[...new Set([...(course.completedSteps||[]),...(lp.course&&lp.course.completedSteps||[])])];merged.lessonProgress[lessonId]=Object.assign({},current,lp,{exprProgress:maxMap(current.exprProgress,lp.exprProgress),course});});if(local.course){merged.course=Object.assign({},preferred.course||{},local.course);for(const flag of ["dialogueCompleted","listeningCompleted","speakingCompleted","conversationCompleted","comparisonCompleted","moduleCompleted"])merged.course[flag]=!!(preferred.course&&preferred.course[flag]||local.course[flag]);merged.course.maxUnlocked=Math.max(Number(preferred.course&&preferred.course.maxUnlocked||0),Number(local.course.maxUnlocked||0));}merged.unlockedGroups=Math.max(Number(preferred.unlockedGroups||1),Number(local.unlockedGroups||1));return merged;}
-const mergeMonotonicProgressBase=mergeMonotonicProgress;
-mergeMonotonicProgress=function(preferred,local){const merged=mergeMonotonicProgressBase(preferred,local);Object.entries(local&&local.lessonProgress||{}).forEach(([lessonId,localLp])=>{const out=merged.lessonProgress[lessonId]||(merged.lessonProgress[lessonId]={}),remoteLp=preferred&&preferred.lessonProgress&&preferred.lessonProgress[lessonId]||{},activities=Object.assign({},remoteLp.speechActivities||{});Object.entries(localLp.speechActivities||{}).forEach(([key,value])=>{const old=activities[key]||{};activities[key]=old.concluida&&!value.concluida?old:Object.assign({},old,value,{concluida:!!(old.concluida||value.concluida),advanceCommitted:!!(old.advanceCommitted||value.advanceCommitted),aprovada:!!(old.aprovada||value.aprovada),comDificuldade:!!(old.comDificuldade||value.comDificuldade),revisaoPendente:!!(old.revisaoPendente||value.revisaoPendente),dominada:!!(old.dominada||value.dominada)});});out.speechActivities=activities;out.speechCoverage=Object.assign({},remoteLp.speechCoverage||{},localLp.speechCoverage||{});out.expressionCompletions=Object.assign({},remoteLp.expressionCompletions||{},localLp.expressionCompletions||{});});return merged;};
+function mergeCoreProgress(preferred,local){if(!preferred)return local;if(!local)return preferred;const merged=Object.assign({},preferred),maxMap=(a,b)=>{const out=Object.assign({},a||{});Object.entries(b||{}).forEach(([k,v])=>out[k]=Math.max(Number(out[k]||0),Number(v||0)));return out;};merged.lessonExprProgress=maxMap(preferred.lessonExprProgress,local.lessonExprProgress);merged.lessonProgress=Object.assign({},preferred.lessonProgress||{});Object.entries(local.lessonProgress||{}).forEach(([lessonId,lp])=>{const current=merged.lessonProgress[lessonId]||{},course=Object.assign({},current.course||{});for(const flag of ["dialogueCompleted","listeningCompleted","speakingCompleted","conversationCompleted","comparisonCompleted","moduleCompleted"])course[flag]=!!(course[flag]||lp.course&&lp.course[flag]);course.maxUnlocked=Math.max(Number(course.maxUnlocked||0),Number(lp.course&&lp.course.maxUnlocked||0));course.completedSteps=[...new Set([...(course.completedSteps||[]),...(lp.course&&lp.course.completedSteps||[])])];merged.lessonProgress[lessonId]=Object.assign({},current,lp,{exprProgress:maxMap(current.exprProgress,lp.exprProgress),course});});if(local.course){merged.course=Object.assign({},preferred.course||{},local.course);for(const flag of ["dialogueCompleted","listeningCompleted","speakingCompleted","conversationCompleted","comparisonCompleted","moduleCompleted"])merged.course[flag]=!!(preferred.course&&preferred.course[flag]||local.course[flag]);merged.course.maxUnlocked=Math.max(Number(preferred.course&&preferred.course.maxUnlocked||0),Number(local.course.maxUnlocked||0));}merged.unlockedGroups=Math.max(Number(preferred.unlockedGroups||1),Number(local.unlockedGroups||1));return merged;}
+function mergeMonotonicProgress(preferred,local){const merged=mergeCoreProgress(preferred,local);Object.entries(local&&local.lessonProgress||{}).forEach(([lessonId,localLp])=>{const out=merged.lessonProgress[lessonId]||(merged.lessonProgress[lessonId]={}),remoteLp=preferred&&preferred.lessonProgress&&preferred.lessonProgress[lessonId]||{},activities=Object.assign({},remoteLp.speechActivities||{});Object.entries(localLp.speechActivities||{}).forEach(([key,value])=>{const old=activities[key]||{};activities[key]=old.concluida&&!value.concluida?old:Object.assign({},old,value,{concluida:!!(old.concluida||value.concluida),advanceCommitted:!!(old.advanceCommitted||value.advanceCommitted),aprovada:!!(old.aprovada||value.aprovada),comDificuldade:!!(old.comDificuldade||value.comDificuldade),revisaoPendente:!!(old.revisaoPendente||value.revisaoPendente),dominada:!!(old.dominada||value.dominada)});});out.speechActivities=activities;out.speechCoverage=Object.assign({},remoteLp.speechCoverage||{},localLp.speechCoverage||{});out.expressionCompletions=Object.assign({},remoteLp.expressionCompletions||{},localLp.expressionCompletions||{});});return merged;}
 async function adoptOrLoadCloudProgress(){
   if(!cloud.user||!cloud.user.emailVerified||!cloud.db)return;
   try{
@@ -3664,14 +3369,6 @@ function renderTokenizedLine(line,opts={}){
   while((m=re.exec(text))){if(m.index>last)parts.push(esc(text.slice(last,m.index)));const token=m[0],word=/[A-Za-z0-9]/.test(token);if(!word)parts.push(esc(token));else{const isolated=token.toLowerCase().replace(/’/g,"'"),compound=spans.find(s=>m.index>=s.start&&m.index<s.end),key=compound?compound.key:isolated,protectedHit=(opts.protectedKeys||[]).some(k=>key===k||isolated===k);const action=protectedHit?`openProtectedHelp(decodeArg('${encodeArg(key)}'),decodeArg('${encodeArg(line.id)}'),decodeArg('${encodeArg(isolated)}'),decodeArg('${encodeArg(opts.expressionId||key)}'))`:`openWordHelp(decodeArg('${encodeArg(key)}'),decodeArg('${encodeArg(line.id)}'),decodeArg('${encodeArg(isolated)}'))`;parts.push(`<button type="button" class="word-token" onclick="${action}">${esc(token)}</button>`);}last=m.index+token.length;}
   if(last<text.length)parts.push(esc(text.slice(last)));return parts.join("");
 }
-function renderDialogueV2(){const lesson=currentLesson();if(!lesson)return renderDashboard();
-  let html=`<div class="card"><div class="eyebrow">História central da aula</div><h2 class="lesson-title">${esc(lesson.title)}</h2><p class="lesson-sub">${esc(lesson.scenario)} · primeiro apenas compreenda; aqui não há avaliação.</p><div class="scene"><div class="scene-shelf">🥛 &nbsp; 🍞 &nbsp; 🥫 &nbsp; 🧃</div><div class="scene-person ${state.lesson.dialoguePlayIndex>=0?'active':''}" style="left:14%"><div class="scene-avatar">🧑‍💼</div><div class="scene-name">Funcionário</div></div><div class="scene-person ${state.lesson.dialoguePlayIndex>=0?'active':''}" style="right:14%"><div class="scene-avatar">🧑</div><div class="scene-name">Cliente</div></div></div><div class="dialogue-actions"><button class="btn" onclick="playIntegratedDialogue()">▶️ Assistir completo</button><button class="btn ghost" onclick="toggleDialoguePause()">${state.lesson.dialoguePaused?'▶️ Continuar':'⏸️ Pausar'}</button><button class="btn ghost" onclick="replayIntegratedDialogue()">🔁 Ouvir novamente</button><button class="btn ghost" onclick="setDialogueSpeed()">${state.lesson.slowSpeed?'🐢 Lenta':'⚡ Normal'}</button></div>`;
-  lesson.dialogue.forEach((t,i)=>{const ch=characterOf(lesson,t.speaker),showPt=!!state.ui.dialogueTranslation[t.id],showPron=!!state.ui.dialoguePron[t.id];html+=`<div class="dialogue-turn ${t.speaker!=='funcionario'?'cliente':''} ${state.lesson.dialoguePlayIndex===i?'speaking':''}"><div class="speaker-tag">${ch.icon}</div><div class="dialogue-bubble"><div style="font-size:11px;font-weight:700;color:var(--gold-dark)">${esc(ch.name)}</div><div class="expr-en" style="font-size:16px">${renderTokenizedLine(t)}</div><div class="help-actions"><button class="reveal-btn" onclick='playDialogueLine(${i})'>🔊 Fala</button><button class="reveal-btn" onclick='toggleLineHelp(${JSON.stringify(t.id)},"pt")'>${showPt?'Ocultar tradução':'Ver tradução da frase'}</button><button class="reveal-btn" onclick='toggleLineHelp(${JSON.stringify(t.id)},"pron")'>${showPron?'Ocultar pronúncia':'Ver pronúncia'}</button></div>${showPt?`<div class="dialogue-translation">${esc(t.pt)}</div>`:""}${showPron?`<div class="dialogue-pron">/ ${esc(t.pron)} /</div>`:""}</div></div>`;});
-  html+=state.course.consultedStep===0?`<button class="btn" style="margin-top:12px" onclick="goScreen('aprender')">Voltar para a trilha</button>`:`<button class="btn" style="margin-top:12px" onclick="completeDialogueIntro()">Entendi a situação · continuar →</button>`;html+=`<button class="btn secondary" style="margin-top:8px;color:var(--ink);border-color:var(--ink)" onclick="goScreen('aprender')">Voltar</button></div>`;return html;}
-function playIntegratedDialogue(){const lesson=currentLesson(),rate=state.lesson.slowSpeed?.65:.92;state.lesson.dialoguePlaying=true;state.lesson.dialoguePaused=false;const items=lesson.dialogue.map(t=>({text:t.en,variety:characterOf(lesson,t.speaker).variety,rate}));speakSequence(items,i=>{state.lesson.dialoguePlayIndex=i;render();},()=>{state.lesson.dialoguePlaying=false;state.lesson.dialoguePlayIndex=-1;render();});}
-function replayIntegratedDialogue(){state.helpStats.replays.dialogue=(state.helpStats.replays.dialogue||0)+1;saveProgress();playIntegratedDialogue();}
-function playDialogueLine(i){const lesson=currentLesson(),t=lesson.dialogue[i];state.helpStats.replays[t.id]=(state.helpStats.replays[t.id]||0)+1;saveProgress();speak(t.en,{variety:characterOf(lesson,t.speaker).variety,rate:state.lesson.slowSpeed?.65:.92,onstart:()=>{state.lesson.dialoguePlayIndex=i;render();},onend:()=>{state.lesson.dialoguePlayIndex=-1;render();}});}
-function toggleDialoguePause(){if(!state.lesson.dialoguePlaying)return;if(state.lesson.dialoguePaused){window.speechSynthesis.resume();state.lesson.dialoguePaused=false;}else{window.speechSynthesis.pause();state.lesson.dialoguePaused=true;}render();}
 function setDialogueSpeed(){state.lesson.slowSpeed=!state.lesson.slowSpeed;if(state.lesson.slowSpeed)state.helpStats.slowAudio.dialogue=(state.helpStats.slowAudio.dialogue||0)+1;cancelAudio();saveProgress();render();}
 function toggleLineHelp(id,type){const map=type==="pt"?state.ui.dialogueTranslation:state.ui.dialoguePron;map[id]=!map[id];if(map[id]){const stats=type==="pt"?state.helpStats.translations:state.helpStats.pronunciations;stats[id]=(stats[id]||0)+1;registerLessonHelp(id,type);}saveProgress();render();}
 function registerLessonHelp(lineId,type){const lesson=currentLesson();lesson.expressions.filter(e=>e.lineId===lineId).forEach(e=>{const s=ensureSrs(e.id);s.hintsUsed++;if(type==="pt")s.translationUsed++;else s.pronunciationUsed++;s.nextReview=Math.min(s.nextReview||Infinity,Date.now()+4*60*60*1000);});}
@@ -3694,9 +3391,7 @@ function renderWordHelpModal(){
 
 function openSettings(){state.ui.settingsOpen=true;render();}
 function closeSettings(){state.ui.settingsOpen=false;render();}
-const renderSettingsModalBase=renderSettingsModal;
-renderSettingsModal=function(){return renderSettingsModalBase().replace("<label>Áudio e efeitos</label><div class=\"chip-row\">",`<label>Áudio, efeitos e movimento</label><div class="chip-row"><button class="chip ${state.settings.animationsEnabled?'active':''}" onclick="state.settings.animationsEnabled=!state.settings.animationsEnabled;saveProgress();render()">Animações</button>`).replace("O progresso do perfil local-default fica somente neste navegador. Não há conta nem segurança de servidor nesta versão. Nenhum dado pessoal é necessário e nenhum áudio é enviado ou guardado pelo aplicativo.","O progresso fica salvo neste navegador e é sincronizado na conta autenticada, separado pelo identificador da conta. A senha permanece sob responsabilidade do Firebase Authentication. Nenhuma gravação de voz é guardada permanentemente.");};
-function renderSettingsModal(){if(!state.ui.settingsOpen)return"";return `<div class="modal-backdrop" onclick="if(event.target===this)closeSettings()"><section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="modal-head"><h2 id="settingsTitle">Configurações</h2><button class="close-btn" aria-label="Fechar" onclick="closeSettings()">✕</button></div><div class="setting-row"><label>Sotaque e voz</label><div class="chip-row"><button class="chip ${state.settings.variety==='us'?'active':''}" onclick="setVariety('us')">🇺🇸 Americano</button><button class="chip ${state.settings.variety==='uk'?'active':''}" onclick="setVariety('uk')">🇮🇪 Britânico/irlandês</button></div><p class="lesson-sub">Os personagens conservam a voz definida pela aula quando ela existe; o navegador escolhe automaticamente o melhor fallback disponível.</p></div><div class="setting-row"><label>Áudio e efeitos</label><div class="chip-row"><button class="chip ${state.settings.autoHelpAudio?'active':''}" onclick="state.settings.autoHelpAudio=!state.settings.autoHelpAudio;saveProgress();render()">Áudio ao abrir tradução</button><button class="chip ${state.settings.effectsEnabled?'active':''}" onclick="state.settings.effectsEnabled=!state.settings.effectsEnabled;saveProgress();render()">Efeitos sonoros</button><button class="chip ${state.settings.ambienceEnabled?'active':''}" onclick="state.settings.ambienceEnabled=!state.settings.ambienceEnabled;if(!state.settings.ambienceEnabled)stopAmbience();saveProgress();render()">Som ambiente</button><button class="chip ${state.settings.muted?'active':''}" onclick="state.settings.muted=!state.settings.muted;if(state.settings.muted)stopAmbience();saveProgress();render()">${state.settings.muted?'🔇 Silenciado':'🔊 Som ativo'}</button></div><label style="margin-top:10px">Volume dos efeitos</label><input aria-label="Volume dos efeitos" type="range" min="0.05" max="0.6" step="0.05" value="${state.settings.effectsVolume}" oninput="state.settings.effectsVolume=Number(this.value);saveProgress()"><label style="margin-top:10px">Volume do ambiente</label><input aria-label="Volume do som ambiente" type="range" min="0.1" max="1" step="0.1" value="${state.settings.ambienceVolume}" oninput="state.settings.ambienceVolume=Number(this.value);restoreAmbience();saveProgress()"></div><div class="setting-row"><label>Nível de apoio</label>${renderSupportSettings()}</div><div class="setting-row"><label>Microfone e áudio</label><button class="btn ghost" onclick="state.ui.settingsOpen=false;state.micTestReturnTo='aprender';state.screen='mic-test';render()">Testar microfone e áudio</button><p class="lesson-sub" style="margin-top:8px">Alguns navegadores exigem HTTPS ou localhost para liberar o microfone. As gravações são temporárias, não são salvas no progresso e são descartadas ao usar, cancelar ou sair.</p></div><div class="setting-row"><label>Importar pacote de aula JSON</label><input type="file" accept="application/json" onchange="importLessonFile(this)"></div><div class="setting-row"><label>Backup</label><button class="btn ghost" onclick="exportProgressJSON()">⬇️ Exportar progresso (JSON)</button><label class="btn ghost" style="margin-top:8px;text-align:center">⬆️ Importar progresso<input type="file" accept="application/json" style="display:none" onchange="importProgressJSON(this)"></label></div><div class="setting-row"><label>Privacidade do protótipo</label><p class="lesson-sub">O progresso do perfil local-default fica somente neste navegador. Não há conta nem segurança de servidor nesta versão. Nenhum dado pessoal é necessário e nenhum áudio é enviado ou guardado pelo aplicativo.</p><button class="btn danger-btn" onclick="resetProgress()">Apagar todo o progresso</button></div></section></div>`;}
+function renderSettingsModal(){if(!state.ui.settingsOpen)return"";return `<div class="modal-backdrop" onclick="if(event.target===this)closeSettings()"><section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="modal-head"><h2 id="settingsTitle">Configurações</h2><button class="close-btn" aria-label="Fechar" onclick="closeSettings()">✕</button></div><div class="setting-row"><label>Sotaque e voz</label><div class="chip-row"><button class="chip ${state.settings.variety==='us'?'active':''}" onclick="setVariety('us')">🇺🇸 Americano</button><button class="chip ${state.settings.variety==='uk'?'active':''}" onclick="setVariety('uk')">🇮🇪 Britânico/irlandês</button></div><p class="lesson-sub">Os personagens conservam a voz definida pela aula quando ela existe; o navegador escolhe automaticamente o melhor fallback disponível.</p></div><div class="setting-row"><label>Áudio, efeitos e movimento</label><div class="chip-row"><button class="chip ${state.settings.animationsEnabled?'active':''}" onclick="state.settings.animationsEnabled=!state.settings.animationsEnabled;saveProgress();render()">Animações</button><button class="chip ${state.settings.autoHelpAudio?'active':''}" onclick="state.settings.autoHelpAudio=!state.settings.autoHelpAudio;saveProgress();render()">Áudio ao abrir tradução</button><button class="chip ${state.settings.effectsEnabled?'active':''}" onclick="state.settings.effectsEnabled=!state.settings.effectsEnabled;saveProgress();render()">Efeitos sonoros</button><button class="chip ${state.settings.ambienceEnabled?'active':''}" onclick="state.settings.ambienceEnabled=!state.settings.ambienceEnabled;if(!state.settings.ambienceEnabled)stopAmbience();saveProgress();render()">Som ambiente</button><button class="chip ${state.settings.muted?'active':''}" onclick="state.settings.muted=!state.settings.muted;if(state.settings.muted)stopAmbience();saveProgress();render()">${state.settings.muted?'🔇 Silenciado':'🔊 Som ativo'}</button></div><label style="margin-top:10px">Volume dos efeitos</label><input aria-label="Volume dos efeitos" type="range" min="0.05" max="0.6" step="0.05" value="${state.settings.effectsVolume}" oninput="state.settings.effectsVolume=Number(this.value);saveProgress()"><label style="margin-top:10px">Volume do ambiente</label><input aria-label="Volume do som ambiente" type="range" min="0.1" max="1" step="0.1" value="${state.settings.ambienceVolume}" oninput="state.settings.ambienceVolume=Number(this.value);restoreAmbience();saveProgress()"></div><div class="setting-row"><label>Nível de apoio</label>${renderSupportSettings()}</div><div class="setting-row"><label>Microfone e áudio</label><button class="btn ghost" onclick="state.ui.settingsOpen=false;state.micTestReturnTo='aprender';state.screen='mic-test';render()">Testar microfone e áudio</button><p class="lesson-sub" style="margin-top:8px">Alguns navegadores exigem HTTPS ou localhost para liberar o microfone. As gravações são temporárias, não são salvas no progresso e são descartadas ao usar, cancelar ou sair.</p></div><div class="setting-row"><label>Importar pacote de aula JSON</label><input type="file" accept="application/json" onchange="importLessonFile(this)"></div><div class="setting-row"><label>Backup</label><button class="btn ghost" onclick="exportProgressJSON()">⬇️ Exportar progresso (JSON)</button><label class="btn ghost" style="margin-top:8px;text-align:center">⬆️ Importar progresso<input type="file" accept="application/json" style="display:none" onchange="importProgressJSON(this)"></label></div><div class="setting-row"><label>Privacidade do protótipo</label><p class="lesson-sub">O progresso fica salvo neste navegador e é sincronizado na conta autenticada. A senha é processada pelo Firebase Authentication. Nenhuma gravação de voz é armazenada permanentemente.</p><button class="btn danger-btn" onclick="resetProgress()">Apagar todo o progresso</button></div></section></div>`;}
 function importLessonFile(input){const file=input.files&&input.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{const report=importLessonJSON(e.target.result);alert(report.valid?`Aula ${report.id} importada com sucesso.`:`Pacote recusado:\n${report.errors.join("\n")}`);};r.readAsText(file);}
 
 const voiceCapture={phase:"idle",kind:null,id:null,target:"",stream:null,recorder:null,recognizer:null,chunks:[],transcript:"",audioUrl:null,seconds:0,timer:null,error:null,mediaAvailable:false,sessionHits:[],sessionPendingPositions:[],sessionTranscripts:[],sessionAttempts:0,sessionInterim:{},sessionFinal:{}};
@@ -3822,7 +3517,9 @@ function renderIntegratedProgress(){const pct=integratedProgress(),lesson=active
 
 document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;if(state.ui&&state.ui.helpOpen){closeHelp();}else if(state.ui&&state.ui.helpWarning){closeProtectedHelp();}else if(state.ui&&state.ui.errorDetail){closeErrorDetail();}else if(state.ui&&state.ui.settingsOpen){closeSettings();}});
 
-/* Correções de regressão nos fluxos antigos preservados */
+/* ===========================================================
+   COMPARAÇÃO FINAL E CONCLUSÃO DO MÓDULO
+=========================================================== */
 const comparisonQuestionDefs=[
   {q:"O cliente estava com pouco de qual produto?",opts:["Leite","Pão","Ovos"],correct:"Leite",expressionId:"running-low-on",explain:"A fala diz que o leite está ficando pouco."},
   {q:"Onde fica o corredor de laticínios?",opts:["Perto da entrada","Perto do fundo da loja","No caixa"],correct:"Perto do fundo da loja",expressionId:"aisle",explain:"O funcionário indica o corredor perto do fundo da loja."},
@@ -3834,9 +3531,7 @@ function renderComparisonQuestions(lesson){const qs=comparisonQuestionsFor(lesso
 function answerComparisonQ(i,val){const qs=comparisonQuestionsFor(activeLesson());if(i!==(state.lesson.comparisonQuestionIndex||0)||!qs[i]||(state.comparisonQuestions||[])[i]!=null)return;state.comparisonQuestions[i]=val;const correct=val===qs[i].correct;playFeedbackEffect(correct,`comparison:${activeLesson().id}:${i}`);recordAttempt(`comparison-${i}`,correct?"correct":"incorrect","independent",{picked:val});if(qs[i].expressionId)scheduleSrs(qs[i].expressionId,{correct,usedHint:false,context:"compreensão final",modality:"dialogue"});saveProgress();render();}
 function markModuleCompleted(lesson=activeLesson()){if(state.course.moduleCompleted)return;state.course.comparisonCompleted=true;state.course.moduleCompleted=true;state.course.step="completed";if(!state.course.completedSteps.includes("comparison"))state.course.completedSteps.push("comparison");state.unlockedGroups=Math.min(TOTAL_GROUPS,Math.max(state.unlockedGroups,state.currentGroup+2));const lp=state.lessonProgress[lesson.id]||(state.lessonProgress[lesson.id]={});lp.completedAt=lp.completedAt||Date.now();}
 async function continueComparisonQuestion(expectedIndex){const qs=comparisonQuestionsFor(activeLesson()),i=state.lesson.comparisonQuestionIndex||0;if(expectedIndex!==i||(state.comparisonQuestions||[])[i]==null)return;if(i+1<qs.length){state.lesson.comparisonQuestionIndex=i+1;state.selectedOption=null;state.answered=false;}else{state.lesson.comparisonStep="summary";markModuleCompleted(activeLesson());}await saveProgress();render();}
-function renderComparisonSummary(lesson){const defs=comparisonQuestionsFor(lesson),answers=state.comparisonQuestions||[],correct=answers.filter((a,i)=>defs[i]&&a===defs[i].correct).length,completed=(lesson.expressions||[]).filter(e=>ensureLessonProgress(e.id)>=TOTAL_EXPR_STAGES),needsReview=(lesson.expressions||[]).filter(e=>{const s=ensureSrs(e.id);return s.wrong>0||s.hintsUsed>0||ensureLessonProgress(e.id)<TOTAL_EXPR_STAGES;}),m=lessonMetrics(lesson),helpCount=Object.values(state.helpStats.words||{}).reduce((a,b)=>a+b,0)+Object.values(state.helpStats.expressions||{}).reduce((a,b)=>a+b,0),minutes=Math.max(1,Math.round((Date.now()-(state.course.startedAt||Date.now()))/60000));state.course.comparisonCompleted=true;if(!state.course.completedSteps.includes("comparison"))state.course.completedSteps.push("comparison");saveProgress();return `<div class="eyebrow">Resumo final da aula</div><h2 class="lesson-title">Módulo concluído: 100%</h2><div class="stat-grid"><div class="stat-box"><div class="num">${m.performance}%</div><div class="lbl">desempenho</div></div><div class="stat-box"><div class="num">${correct}/${defs.length}</div><div class="lbl">compreensão final</div></div><div class="stat-box"><div class="num">${needsReview.length}</div><div class="lbl">itens para revisão</div></div><div class="stat-box"><div class="num">${minutes} min</div><div class="lbl">tempo informativo</div></div></div><div class="transcript-box">Speaking: ${state.lessonProgress[lesson.id].speakingStatus==='pending-technical'?'pendente':state.lessonProgress[lesson.id].speakingStatus==='not-started'?'não iniciado':'realizado'} · Ajudas consultadas: ${helpCount}</div><div class="eyebrow" style="margin-top:12px">Vocabulário e chunks estudados</div><div class="meaning-list">${(lesson.expressions||[]).map(e=>`<div class="meaning-item"><b>${esc(e.text)}</b> — ${esc(e.pt)} <button class="listen-btn" aria-label="Ouvir ${esc(e.text)}" onclick="speak(decodeArg('${encodeArg(e.text)}'))">🔊</button></div>`).join("")}</div><div class="eyebrow" style="margin-top:12px">Expressões concluídas</div><div class="transcript-box">${completed.map(e=>`• ${esc(e.text)}`).join("<br>")||"Continue praticando."}</div><div class="eyebrow" style="margin-top:12px">Programado para revisão</div><div class="transcript-box">${needsReview.map(e=>`• ${esc(e.text)}`).join("<br>")||"Nenhum item urgente; as revisões ocasionais continuam."}</div><button class="btn ghost" style="margin-top:14px" onclick="openDialogueReview()">Rever diálogo</button><button class="btn" style="margin-top:10px" onclick="goScreen('aprender')">Continuar</button>`;}
-const renderComparisonSummaryOriginal=renderComparisonSummary;
-renderComparisonSummary=function(lesson){if(!state.course.moduleCompleted)markModuleCompleted(lesson);const defs=comparisonQuestionsFor(lesson),answers=state.comparisonQuestions||[],correct=answers.filter((a,i)=>defs[i]&&a===defs[i].correct).length,needsReview=(lesson.expressions||[]).filter(e=>{const s=ensureSrs(e.id);return s.wrong>0||s.hintsUsed>0;}),m=lessonMetrics(lesson);return `<div style="text-align:center;font-size:44px">🎉</div><div class="eyebrow">Aula finalizada</div><h2 class="lesson-title">Módulo concluído!</h2><p class="lesson-sub">Muito bem! Seu progresso foi salvo e os pontos que precisam de prática voltarão nas revisões.</p><div class="stat-grid"><div class="stat-box"><div class="num">100%</div><div class="lbl">progresso</div></div><div class="stat-box"><div class="num">${m.performance}%</div><div class="lbl">desempenho</div></div><div class="stat-box"><div class="num">${correct}/${defs.length}</div><div class="lbl">compreensão</div></div><div class="stat-box"><div class="num">${needsReview.length}</div><div class="lbl">para revisar</div></div></div><div class="eyebrow" style="margin-top:12px">Expressões aprendidas</div><div class="meaning-list">${(lesson.expressions||[]).map(e=>`<div class="meaning-item"><b>${esc(e.text)}</b> — ${esc(e.pt)} <button class="listen-btn" aria-label="Ouvir ${esc(e.text)}" onclick="speak(decodeArg('${encodeArg(e.text)}'))">🔊</button></div>`).join("")}</div>${needsReview.length?`<div class="eyebrow" style="margin-top:12px">Programado para revisão</div><div class="transcript-box">${needsReview.map(e=>`• ${esc(e.text)}`).join("<br>")}</div>`:""}<button class="btn" style="margin-top:14px" onclick="finishCompletedModule()">Voltar para o início</button>`;};
+function renderComparisonSummary(lesson){if(!state.course.moduleCompleted)markModuleCompleted(lesson);const defs=comparisonQuestionsFor(lesson),answers=state.comparisonQuestions||[],correct=answers.filter((a,i)=>defs[i]&&a===defs[i].correct).length,needsReview=(lesson.expressions||[]).filter(e=>{const s=ensureSrs(e.id);return s.wrong>0||s.hintsUsed>0;}),m=lessonMetrics(lesson);return `<div style="text-align:center;font-size:44px">🎉</div><div class="eyebrow">Aula finalizada</div><h2 class="lesson-title">Módulo concluído!</h2><p class="lesson-sub">Muito bem! Seu progresso foi salvo e os pontos que precisam de prática voltarão nas revisões.</p><div class="stat-grid"><div class="stat-box"><div class="num">100%</div><div class="lbl">progresso</div></div><div class="stat-box"><div class="num">${m.performance}%</div><div class="lbl">desempenho</div></div><div class="stat-box"><div class="num">${correct}/${defs.length}</div><div class="lbl">compreensão</div></div><div class="stat-box"><div class="num">${needsReview.length}</div><div class="lbl">para revisar</div></div></div><div class="eyebrow" style="margin-top:12px">Expressões aprendidas</div><div class="meaning-list">${(lesson.expressions||[]).map(e=>`<div class="meaning-item"><b>${esc(e.text)}</b> — ${esc(e.pt)} <button class="listen-btn" aria-label="Ouvir ${esc(e.text)}" onclick="speak(decodeArg('${encodeArg(e.text)}'))">🔊</button></div>`).join("")}</div>${needsReview.length?`<div class="eyebrow" style="margin-top:12px">Programado para revisão</div><div class="transcript-box">${needsReview.map(e=>`• ${esc(e.text)}`).join("<br>")}</div>`:""}<button class="btn" style="margin-top:14px" onclick="finishCompletedModule()">Voltar para o início</button>`;};
 function finishCompletedModule(){
   markModuleCompleted(activeLesson());
   clearActivityReviewNavigation();
