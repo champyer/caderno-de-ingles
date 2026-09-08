@@ -438,7 +438,7 @@ const EXPR = [
    usuk:null,examples:[
      {en:"I usually start in the produce section.",pt:"Eu geralmente começo pela seção de frutas e verduras."},
      {en:"The tomatoes are in the produce section.",pt:"Os tomates estão na seção de hortifrúti."}]},
-  {id:15,g:2,en:"aisle",pron:"áiol",pt:"corredor do supermercado",
+  {id:15,g:2,en:"aisle",pron:"áil",pt:"corredor do supermercado",
    meaning:"Cada corredor/fileira do mercado, geralmente com um tipo de produto (ex: 'dairy aisle' = corredor dos laticínios).",
    other:"Também existe em cinemas, igrejas e aviões (assento no corredor = 'aisle seat').",usuk:null,examples:[
      {en:"Then I hit the dairy aisle.",pt:"Depois eu passo pelo corredor de laticínios."},
@@ -664,7 +664,7 @@ const LESSONS = [
       {id:"t2", speaker:"cliente", en:"Yes, we're running low on milk. Where can I find it?",
         pron:"Iés, uír râning lôu ón mílk. Uér kén ái fáind ít?", pt:"Sim, nosso leite está quase acabando. Onde eu encontro?"},
       {id:"t3", speaker:"funcionario", en:"It's in the dairy aisle, near the back of the store.",
-        pron:"Its ín dâ déri áiol, níer dâ bák âv dâ stór.", pt:"Está no corredor de laticínios, perto do fundo da loja."},
+        pron:"Its ín dâ déri áil, níer dâ bák âv dâ stór.", pt:"Está no corredor de laticínios, perto do fundo da loja."},
       {id:"t4", speaker:"cliente", en:"Great, thank you! Is the bread on sale today?",
         pron:"Gréit, tchênk iú! Iz dâ brêd ón sêil tudêi?", pt:"Ótimo, obrigado! O pão está em promoção hoje?"},
       {id:"t5", speaker:"funcionario", en:"Yes, it's 20% off. You can pay at the self-service till when you're ready.",
@@ -685,12 +685,12 @@ const LESSONS = [
           acceptKeywords:[["running","low","on","milk"]],
         }},
       {id:"aisle-t3", text:"aisle", lineId:"t3",
-        pron:"áiol", pt:"corredor do supermercado",
+        pron:"áil", pt:"corredor do supermercado",
         explain:"Cada corredor do mercado, geralmente com um tipo de produto.",
         newContext:{
           prompt_pt:"Você quer saber em qual corredor do supermercado fica o arroz.",
-          example:"Which aisle is the soda in?",
-          acceptKeywords:[["aisle","soda"],["which","aisle"]],
+          example:"Which aisle is the rice in?",
+          acceptKeywords:[["aisle","rice"],["which","aisle"]],
         }},
       {id:"on-sale-t4", text:"on sale", lineId:"t4",
         pron:"ón sêil", pt:"em promoção",
@@ -756,7 +756,7 @@ const DIALOGUES = [
       {speaker:"cliente", us:"Yes, where can I find the milk?", uk:"Yes, where can I find the milk?",
         pron:"Iés, uér kén ái fáind dâ mílk?", pt:"Sim, onde eu encontro o leite?"},
       {speaker:"funcionario", us:"It's in the dairy aisle, near the back of the store.", uk:"It's in the dairy aisle, near the back of the store.",
-        pron:"Its ín dâ déri áiol, níer dâ bák âv dâ stór.", pt:"Está no corredor de laticínios, perto do fundo da loja."},
+        pron:"Its ín dâ déri áil, níer dâ bák âv dâ stór.", pt:"Está no corredor de laticínios, perto do fundo da loja."},
       {speaker:"cliente", us:"Great, thank you!", uk:"Great, thank you!",
         pron:"Gréit, tchênk iú!", pt:"Ótimo, obrigado!"},
     ]},
@@ -816,7 +816,7 @@ const CONVO_SCENARIOS = [
     steps:[
       {npc:[{us:"Hi! Can I help you find something?", uk:"Hi! Can I help you find something?", pron:"Rái! Kén ái hélp iú fáind sámtchin?", pt:"Oi! Posso te ajudar a encontrar algo?"}],
        accept:[["milk"],["where","milk"]], hints:["Yes, where can I find the milk?","I'm looking for milk."]},
-      {npc:[{us:"It's in the dairy aisle, near the back of the store.", uk:"It's in the dairy aisle, near the back of the store.", pron:"Its ín dâ déri áiol, níer dâ bák âv dâ stór.", pt:"Está no corredor de laticínios, no fundo da loja."},
+      {npc:[{us:"It's in the dairy aisle, near the back of the store.", uk:"It's in the dairy aisle, near the back of the store.", pron:"Its ín dâ déri áil, níer dâ bák âv dâ stór.", pt:"Está no corredor de laticínios, perto do fundo da loja."},
             {us:"Do you need help finding anything else?", uk:"Do you need help finding anything else?", pron:"Du iú níd hélp fáindin énitchin éls?", pt:"Precisa de ajuda para achar mais alguma coisa?"}],
        accept:[["no","thank"],["thanks"],["that's","all"]], hints:["No, thank you, that's all.","No, thanks!"]},
     ]},
@@ -824,7 +824,7 @@ const CONVO_SCENARIOS = [
     steps:[
       {npc:[{us:"Hi, looking for something?", uk:"Hi, looking for something?", pron:"Rái, lúkin fôr sámtchin?", pt:"Oi, procurando alguma coisa?"}],
        accept:[["aisle","bread"],["where","bread"],["bread"]], hints:["Which aisle is the bread in?","Where can I find the bread?"]},
-      {npc:[{us:"Bread is on aisle 3, next to the pastries.", uk:"Bread is on aisle 3, next to the pastries.", pron:"Brêd iz ón áiol tchrí, nékst tchu dâ péistris.", pt:"O pão está no corredor 3, perto das pastelarias/doces."}],
+      {npc:[{us:"Bread is on aisle 3, next to the pastries.", uk:"Bread is on aisle 3, next to the pastries.", pron:"Brêd iz ón áil tchrí, nékst tchu dâ péistris.", pt:"O pão está no corredor 3, ao lado dos produtos de padaria."}],
        accept:[["thank"],["thanks"],["great"]], hints:["Great, thank you!","Thanks a lot!"]},
     ]},
   {id:3, title:"Perguntar se um produto está em promoção", role:"funcionario",
@@ -866,7 +866,7 @@ const CONVO_SCENARIOS = [
     steps:[
       {npc:[{us:"Hi! Can I help you find something?", uk:"Hi! Can I help you find something?", pron:"Rái! Kén ái hélp iú fáind sámtchin?", pt:"Oi! Posso ajudar a encontrar algo?"}],
        accept:[["milk"],["bread"],["looking for"]], hints:["I'm looking for milk and bread.","Yes, where's the milk?"]},
-      {npc:[{us:"Sure, dairy is aisle 2 and bread is aisle 3.", uk:"Sure, dairy is aisle 2 and bread is aisle 3.", pron:"Shór, déri iz áiol tú énd brêd iz áiol tchrí.", pt:"Claro, laticínios é corredor 2 e pão é corredor 3."}],
+      {npc:[{us:"Sure, dairy is aisle 2 and bread is aisle 3.", uk:"Sure, dairy is aisle 2 and bread is aisle 3.", pron:"Shór, déri iz áil tú énd brêd iz áil tchrí.", pt:"Claro, os laticínios ficam no corredor 2 e o pão fica no corredor 3."}],
        accept:[["thank"],["thanks"],["great"]], hints:["Great, thank you!","Thanks a lot!"]},
       {npc:[{us:"That'll be nine eighty. Cash or card?", uk:"That'll be nine eighty. Cash or card?", pron:"Dét-ol bi náin éiti. Kásh ór kárd?", pt:"Vai dar nove e oitenta. Dinheiro ou cartão?"}],
        accept:[["card"],["cash"]], hints:["Card, please.","Cash, please."]},
@@ -3359,7 +3359,7 @@ const DEFAULT_COURSE_STEPS = [
 const WORD_HELP = {
   "running low on":{pron:"râning lôu ón",context:"estar ficando com pouco de algo",variety:"Usado nos EUA, Reino Unido e Irlanda.",others:[
     ["run","correr — ação física: I run every morning."],["run","funcionar — máquina: The computer is running."],["run","administrar — negócio: She runs a shop."]]},
-  "aisle":{pron:"áiol",context:"corredor do supermercado",variety:"Uso geral; também aparece em aviões, cinemas e igrejas.",others:[["aisle seat","assento do corredor — contexto de avião."],["wedding aisle","corredor central — contexto de casamento."]]},
+  "aisle":{pron:"áil",context:"corredor do supermercado",variety:"Uso geral; também aparece em aviões, cinemas e igrejas.",others:[["aisle seat","assento do corredor — contexto de avião."],["wedding aisle","corredor central — contexto de casamento."]]},
   "on sale":{pron:"ón sêil",context:"em promoção, com preço reduzido",variety:"Uso geral. Não confundir com for sale.",others:[["for sale","à venda — disponível para compra."],["sale","liquidação — evento de descontos."]]},
   "self-service till":{pron:"sélf-sérvis tíl",context:"caixa de autoatendimento",variety:"Britânico/irlandês; nos EUA é mais comum self-checkout.",others:[["till","caixa/registradora — Reino Unido e Irlanda."],["self-checkout","caixa de autoatendimento — Estados Unidos."]]},
   "find":{pron:"fáind",context:"encontrar",variety:"Uso geral.",others:[["find out","descobrir uma informação."],["find","achar/opinar: I find it useful."]]},
@@ -3378,7 +3378,7 @@ const BASIC_WORD_HELP = {
   "yes":["iés","sim","resposta afirmativa"],"we're":["uír","we are; nós estamos","contração de we are"],"milk":["mílk","leite","substantivo"],
   "where":["uér","onde","palavra interrogativa"],"it":["ít","isso/ele/ela para coisa ou situação","pronome"],"it's":["íts","it is; está/é","contração de it is"],
   "in":["ín","em/dentro de","preposição"],"the":["dâ","o, a, os ou as conforme o contexto","artigo definido"],"dairy":["déri","laticínios","substantivo usado como descrição"],
-  "aisle":["áiol","corredor","substantivo"],"near":["níer","perto de","preposição"],"back":["bák","fundo/parte de trás","substantivo"],"of":["âv","de; liga duas ideias","preposição"],
+  "aisle":["áil","corredor","substantivo"],"near":["níer","perto de","preposição"],"back":["bák","fundo/parte de trás","substantivo"],"of":["âv","de; liga duas ideias","preposição"],
   "store":["stór","loja","substantivo"],"great":["gréit","ótimo","adjetivo/interjeição"],"thank":["tchénk","agradecer","verbo"],"is":["íz","é/está","verbo be"],
   "bread":["bréd","pão","substantivo"],"today":["tudêi","hoje","advérbio"],"off":["óf","de desconto nesta frase","partícula de redução"],
   "pay":["pêi","pagar","verbo"],"at":["ét","em/no ponto ou local indicado","preposição"],"when":["uén","quando","conjunção"],"you're":["iór","you are; você está","contração de you are"],
@@ -3555,18 +3555,28 @@ function renderAccessScreen(){
 }
 function renderAuthModal(){if(!cloud.authOpen||!cloud.user||!cloud.user.emailVerified)return"";return `<div class="modal-backdrop" onclick="if(event.target===this)closeAuth()"><section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="accountTitle"><div class="modal-head"><h2 id="accountTitle">Minha conta</h2><button class="close-btn" aria-label="Fechar" onclick="closeAuth()">✕</button></div><div class="setting-row"><b>${esc(cloud.user.email)}</b><div class="sync-note ${cloud.status==='synced'?'ok':cloud.status==='error'?'error':''}">${esc(cloud.message)}</div><p class="lesson-sub">✅ E-mail verificado</p></div><button class="btn ghost" onclick="exportProgressJSON()">⬇️ Exportar backup JSON</button><button class="btn ghost" style="margin-top:9px" onclick="logoutAccount()">Sair desta conta</button><button class="btn danger-btn" style="margin-top:9px" onclick="deleteAccountAndData()">Excluir conta e dados</button><p class="privacy-note">O progresso fica salvo neste dispositivo e sincronizado em users/{uid}/courses quando há conexão. Gravações de voz nunca são armazenadas.</p></section></div>`;}
 function renderTabs(){const area=state.screen==="revisar"||state.screen==="aula-revisao"?"revisar":state.screen==="progresso"?"progresso":"aprender";return `<nav class="bottom-nav" aria-label="Navegação principal"><button class="${area==='aprender'?'active':''}" onclick="goScreen('aprender')"><span>📚</span>Aprender</button><button class="${area==='revisar'?'active':''}" onclick="goScreen('revisar')"><span>🔁</span>Revisar</button><button class="${area==='progresso'?'active':''}" onclick="goScreen('progresso')"><span>📈</span>Progresso</button></nav>`;}
-function goScreen(id){cancelAudio();if(id!=="lesson-dialogue-v2"&&typeof stopAmbience==="function")stopAmbience();if(typeof releaseVoiceCapture==="function"&&voiceCapture.phase!=="idle")releaseVoiceCapture(false);state.ui.helpOpen=null;state.screen=id;render();}
+function clearActivityReviewNavigation(){
+  if(typeof pageNavigation==="undefined")return;
+  pageNavigation.review=null;
+  pageNavigation.reviewed=[];
+  pageNavigation.furthest=null;
+  pageNavigation.direction=null;
+  pageNavigation.error="";
+  pageNavigation.busy=false;
+  pageNavigation.status="idle";
+}
+function goScreen(id){cancelAudio();if(id!=="lesson-dialogue-v2"&&typeof stopAmbience==="function")stopAmbience();if(typeof releaseVoiceCapture==="function"&&voiceCapture.phase!=="idle")releaseVoiceCapture(false);state.ui.helpOpen=null;if(["aprender","revisar","progresso"].includes(id))clearActivityReviewNavigation();state.screen=id;render();}
 function openDialogueReview(){if(state.ui.dialogueReviewReturn)return;cancelAudio();if(typeof stopAmbience==="function")stopAmbience();state.ui.dialogueReviewReturn={screen:state.screen,scrollY:window.scrollY||0};state.screen="lesson-dialogue-v2";state.course.consultedStep=null;render();}
 function returnFromDialogueReview(){const back=state.ui.dialogueReviewReturn;if(!back)return;cancelAudio();if(typeof stopAmbience==="function")stopAmbience();state.ui.dialogueReviewReturn=null;state.screen=back.screen||"aprender";render();if(typeof window.scrollTo==="function"){const restore=()=>window.scrollTo(0,back.scrollY||0);if(typeof window.requestAnimationFrame==="function")window.requestAnimationFrame(restore);else restore();}}
 function renderPersistentLessonTools(){return"";}
 
 function renderDashboard(){
   const lesson=activeLesson(),pct=integratedProgress(),idx=currentCourseIndex(),due=dueSrsExpressions().filter(e=>e.lessonId===lesson.id).length,steps=courseStepsFor(lesson);
-  if(state.course.moduleCompleted){const lessonIndex=LESSONS.findIndex(l=>l.id===lesson.id),next=LESSONS[lessonIndex+1];return `${due?`<div class="card" style="border:2px solid var(--gold)"><div class="eyebrow">Revisões de hoje</div><h2 class="lesson-title">${due} item(ns) programado(s)</h2><button class="btn" onclick="startReviewQueue()">Começar revisões</button></div>`:""}<div class="card hero-card"><div style="font-size:42px">🎉</div><div class="eyebrow">Módulo concluído</div><h2 class="lesson-title">${esc(lesson.title)}</h2><div class="hero-progress"><div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div><strong>100%</strong></div><p class="lesson-sub">Seu progresso foi salvo. Você pode revisar o conteúdo quando quiser.</p>${next?`<div class="next-label">Próximo módulo disponível: <b>${esc(next.title)}</b></div><button class="btn" onclick="startNextLesson('${esc(next.id)}')">Iniciar próximo módulo</button>`:`<div class="next-label">Você concluiu o módulo disponível. Novos módulos aparecerão aqui quando forem adicionados.</div>`}</div>`;}
+  if(state.course.moduleCompleted){const lessonIndex=LESSONS.findIndex(l=>l.id===lesson.id),next=LESSONS[lessonIndex+1];return `${due?`<div class="card" style="border:2px solid var(--gold)"><div class="eyebrow">Revisões de hoje</div><h2 class="lesson-title">${due} item(ns) programado(s)</h2><button class="btn" onclick="startReviewQueue()">Começar revisões</button></div>`:""}<div class="card hero-card"><div style="font-size:42px">🎉</div><div class="eyebrow">Módulo concluído</div><h2 class="lesson-title">${esc(lesson.title)}</h2><div class="hero-progress"><div class="progress-bar-wrap"><div class="progress-bar" style="width:100%"></div></div><strong>100%</strong></div><p class="lesson-sub">Seu progresso foi salvo. Você pode revisar o conteúdo quando quiser.</p>${next?`<div class="next-label">Próximo módulo disponível: <b>${esc(next.title)}</b></div><button class="btn" onclick="startNextLesson('${esc(next.id)}')">Iniciar próximo módulo</button>`:`<div class="next-label">Você concluiu o módulo disponível nesta versão. O próximo será adicionado sem apagar o progresso conquistado.</div>`}<div class="voice-actions" style="margin-top:14px"><button class="btn ghost" onclick="openDialogueReview()">Rever diálogo</button><button class="btn ghost" onclick="goScreen('revisar')">Ir para revisões</button><button class="btn ghost" onclick="goScreen('progresso')">Ver progresso</button></div></div>`;}
   return `${due?`<div class="card" style="border:2px solid var(--gold)"><div class="eyebrow">Revisões de hoje</div><h2 class="lesson-title">${due} item(ns) programado(s)</h2><p class="lesson-sub">Faça uma revisão curta sem precisar refazer a aula completa.</p><button class="btn" onclick="startReviewQueue()">Começar revisões</button></div>`:""}<div class="card hero-card"><div class="eyebrow">Olá! Vamos continuar?</div><h2 class="lesson-title">${esc(lesson.title)}</h2><p class="lesson-sub">${esc(lesson.scenario||"")}</p><div class="hero-progress"><div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div><strong>${pct}%</strong></div><div class="next-label">Próxima atividade: <b>${esc(nextActivityLabel())}</b></div><button class="btn" onclick="continueCourse()">${pct?"Continuar aula":"Começar aula"} →</button><div class="review-badge">🔁 ${due} revisão(ões) programada(s) para agora</div></div>
   <div class="card"><div class="eyebrow">Trilha da aula</div><div class="lesson-path">${steps.map((s,i)=>{const cls=i<idx?'done':i===idx?'current':'locked',enabled=i<=idx;return `<button type="button" class="path-item ${cls}" ${enabled?`onclick="openCourseStep(${i})"`:'disabled'}><div class="path-icon">${i<idx?'✅':s.icon}</div><div><div class="path-title">${esc(s.title)}</div><div class="path-sub">${esc(s.sub)}</div></div><div>${i<idx?'Concluído':i===idx?'Atual':'🔒'}</div></button>`;}).join("")}</div></div>`;
 }
-function startNextLesson(id){const next=LESSON_REGISTRY.get(id)||LESSONS.find(l=>l.id===id);if(!next)return;state.lesson.currentLessonId=next.id;ensureV2State();state.screen="aprender";saveProgress();render();}
+function startNextLesson(id){const next=LESSON_REGISTRY.get(id)||LESSONS.find(l=>l.id===id);if(!next)return;clearActivityReviewNavigation();state.lesson.currentLessonId=next.id;ensureV2State();state.screen="aprender";saveProgress();render();}
 function continueCourse(){cancelAudio();state.course.consultedStep=null;const idx=currentCourseIndex(),lesson=activeLesson(),steps=courseStepsFor(lesson);state.course.step=steps[idx].id;
   if(idx===0){state.lesson.currentLessonId=lesson.id;state.screen="lesson-dialogue-v2";}
   else if(idx===1){const e=lesson.expressions.find(x=>ensureLessonProgress(x.id)<TOTAL_EXPR_STAGES);state.lesson.currentLessonId=lesson.id;state.lesson.focusExpressionId=e.id;state.answered=false;state.lastResult=null;state.screen="aula-expressao";}
@@ -3795,7 +3805,14 @@ async function continueComparisonQuestion(expectedIndex){const qs=comparisonQues
 function renderComparisonSummary(lesson){const defs=comparisonQuestionsFor(lesson),answers=state.comparisonQuestions||[],correct=answers.filter((a,i)=>defs[i]&&a===defs[i].correct).length,completed=(lesson.expressions||[]).filter(e=>ensureLessonProgress(e.id)>=TOTAL_EXPR_STAGES),needsReview=(lesson.expressions||[]).filter(e=>{const s=ensureSrs(e.id);return s.wrong>0||s.hintsUsed>0||ensureLessonProgress(e.id)<TOTAL_EXPR_STAGES;}),m=lessonMetrics(lesson),helpCount=Object.values(state.helpStats.words||{}).reduce((a,b)=>a+b,0)+Object.values(state.helpStats.expressions||{}).reduce((a,b)=>a+b,0),minutes=Math.max(1,Math.round((Date.now()-(state.course.startedAt||Date.now()))/60000));state.course.comparisonCompleted=true;if(!state.course.completedSteps.includes("comparison"))state.course.completedSteps.push("comparison");saveProgress();return `<div class="eyebrow">Resumo final da aula</div><h2 class="lesson-title">Módulo concluído: 100%</h2><div class="stat-grid"><div class="stat-box"><div class="num">${m.performance}%</div><div class="lbl">desempenho</div></div><div class="stat-box"><div class="num">${correct}/${defs.length}</div><div class="lbl">compreensão final</div></div><div class="stat-box"><div class="num">${needsReview.length}</div><div class="lbl">itens para revisão</div></div><div class="stat-box"><div class="num">${minutes} min</div><div class="lbl">tempo informativo</div></div></div><div class="transcript-box">Speaking: ${state.lessonProgress[lesson.id].speakingStatus==='pending-technical'?'pendente':state.lessonProgress[lesson.id].speakingStatus==='not-started'?'não iniciado':'realizado'} · Ajudas consultadas: ${helpCount}</div><div class="eyebrow" style="margin-top:12px">Vocabulário e chunks estudados</div><div class="meaning-list">${(lesson.expressions||[]).map(e=>`<div class="meaning-item"><b>${esc(e.text)}</b> — ${esc(e.pt)} <button class="listen-btn" aria-label="Ouvir ${esc(e.text)}" onclick="speak(decodeArg('${encodeArg(e.text)}'))">🔊</button></div>`).join("")}</div><div class="eyebrow" style="margin-top:12px">Expressões concluídas</div><div class="transcript-box">${completed.map(e=>`• ${esc(e.text)}`).join("<br>")||"Continue praticando."}</div><div class="eyebrow" style="margin-top:12px">Programado para revisão</div><div class="transcript-box">${needsReview.map(e=>`• ${esc(e.text)}`).join("<br>")||"Nenhum item urgente; as revisões ocasionais continuam."}</div><button class="btn ghost" style="margin-top:14px" onclick="openDialogueReview()">Rever diálogo</button><button class="btn" style="margin-top:10px" onclick="goScreen('aprender')">Continuar</button>`;}
 const renderComparisonSummaryOriginal=renderComparisonSummary;
 renderComparisonSummary=function(lesson){if(!state.course.moduleCompleted)markModuleCompleted(lesson);const defs=comparisonQuestionsFor(lesson),answers=state.comparisonQuestions||[],correct=answers.filter((a,i)=>defs[i]&&a===defs[i].correct).length,needsReview=(lesson.expressions||[]).filter(e=>{const s=ensureSrs(e.id);return s.wrong>0||s.hintsUsed>0;}),m=lessonMetrics(lesson);return `<div style="text-align:center;font-size:44px">🎉</div><div class="eyebrow">Aula finalizada</div><h2 class="lesson-title">Módulo concluído!</h2><p class="lesson-sub">Muito bem! Seu progresso foi salvo e os pontos que precisam de prática voltarão nas revisões.</p><div class="stat-grid"><div class="stat-box"><div class="num">100%</div><div class="lbl">progresso</div></div><div class="stat-box"><div class="num">${m.performance}%</div><div class="lbl">desempenho</div></div><div class="stat-box"><div class="num">${correct}/${defs.length}</div><div class="lbl">compreensão</div></div><div class="stat-box"><div class="num">${needsReview.length}</div><div class="lbl">para revisar</div></div></div><div class="eyebrow" style="margin-top:12px">Expressões aprendidas</div><div class="meaning-list">${(lesson.expressions||[]).map(e=>`<div class="meaning-item"><b>${esc(e.text)}</b> — ${esc(e.pt)} <button class="listen-btn" aria-label="Ouvir ${esc(e.text)}" onclick="speak(decodeArg('${encodeArg(e.text)}'))">🔊</button></div>`).join("")}</div>${needsReview.length?`<div class="eyebrow" style="margin-top:12px">Programado para revisão</div><div class="transcript-box">${needsReview.map(e=>`• ${esc(e.text)}`).join("<br>")}</div>`:""}<button class="btn" style="margin-top:14px" onclick="finishCompletedModule()">Voltar para o início</button>`;};
-async function finishCompletedModule(){markModuleCompleted(activeLesson());await saveProgress();state.screen="aprender";render();}
+function finishCompletedModule(){
+  markModuleCompleted(activeLesson());
+  clearActivityReviewNavigation();
+  state.lesson.comparisonStep="summary";
+  state.screen="aprender";
+  render();
+  saveProgress();
+}
 function answerReviewLight(exprId,text){if(state.answered)return;const expr=findExpr(exprId).expr,n=normalize(text),keywords=normalize(expr.pt).split(" ").filter(w=>w.length>3);state.answered=true;state.lastResult=keywords.some(w=>n.includes(w))&&n.length>=8;playFeedbackEffect(state.lastResult,`review:${exprId}:${ensureLessonProgress(exprId)}`);recordAttempt(exprId,state.lastResult?"correct":"incorrect","independent",{modality:"writing"});scheduleSrs(exprId,{correct:state.lastResult,usedHint:false,context:"recuperação final",modality:"writing"});if(!state.lastResult)registerModuleError(exprId,"review");saveProgress();render();}
 
 /* boot */
