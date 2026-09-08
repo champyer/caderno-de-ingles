@@ -2365,11 +2365,16 @@ function openListenSentence(id){
   render();
 }
 
+function lessonListeningItems(){return (activeLesson()&&activeLesson().listening)||LISTEN_SENTENCES;}
+function lessonSpeakingItems(){return (activeLesson()&&activeLesson().speaking)||FLUENCY_PHRASES;}
+function lessonConversationItems(){return (activeLesson()&&activeLesson().conversation)||CONVO_SCENARIOS;}
+
 function buildListenAttempt(id){
   // decide o tipo de atividade com base na etapa efetiva
-  const contrast = LISTEN_CONTRASTS.find(c=>c.options.includes(id));
+  const listening=lessonListeningItems();
+  const contrast = LISTEN_CONTRASTS.find(c=>c.options.includes(id)&&c.options.every(oid=>listening.some(s=>s.id===oid)));
   if(contrast){
-    const opts = shuffle(contrast.options.map(oid=>LISTEN_SENTENCES.find(s=>s.id===oid)));
+    const opts = shuffle(contrast.options.map(oid=>listening.find(s=>s.id===oid)));
     state.listenAttemptOptions = opts;
   } else {
     state.listenAttemptOptions = null;
@@ -2384,7 +2389,7 @@ function effectiveStage(id){
 }
 
 function renderOuvirFrase(){
-  const s = LISTEN_SENTENCES.find(x=>x.id===state.listenCurrent);
+  const s = lessonListeningItems().find(x=>x.id===state.listenCurrent);
   if(!s) { state.screen = "ouvir"; return renderOuvirIntro(); }
   const baseStage = effectiveStage(s.id);
   const stage = state.listenManualHide ? 4 : baseStage;
@@ -2481,7 +2486,7 @@ function renderOuvirFrase(){
 function revealListen(field){ state.listenReveal[field] = true; render(); }
 
 function playListenSentence(id, rate){
-  const s = LISTEN_SENTENCES.find(x=>x.id===id);
+  const s = lessonListeningItems().find(x=>x.id===id);
   if(!s) return;
   state.listenSpeakingId = id;
   render();
@@ -2496,7 +2501,7 @@ function registerListenResult(id, correct){
 
 function answerListenChoice(pickedId){
   if(state.listenAnswered) return;
-  const s = LISTEN_SENTENCES.find(x=>x.id===state.listenCurrent);
+  const s = lessonListeningItems().find(x=>x.id===state.listenCurrent);
   const correct = pickedId === s.id;
   registerListenResult(s.id, correct);
   state.listenAnswered = true;
@@ -2505,7 +2510,7 @@ function answerListenChoice(pickedId){
   render();
 }
 function answerListenTyped(text, id){
-  const s = LISTEN_SENTENCES.find(x=>x.id===id);
+  const s = lessonListeningItems().find(x=>x.id===id);
   const correct = looseMatch(text, s.en);
   registerListenResult(s.id, correct);
   state.listenAnswered = true;
@@ -2514,7 +2519,7 @@ function answerListenTyped(text, id){
   render();
 }
 function answerListenSimple(said, id){
-  const s = LISTEN_SENTENCES.find(x=>x.id===id);
+  const s = lessonListeningItems().find(x=>x.id===id);
   registerListenResult(s.id, said);
   state.listenAnswered = true;
   state.listenLastResult = {correct: said};
@@ -2523,6 +2528,8 @@ function answerListenSimple(said, id){
 }
 function finishListenAttempt(id){
   if(state.course && state.course.step==="listening"){
+    const items=lessonListeningItems(),currentIndex=items.findIndex(item=>item.id===id),next=items[currentIndex+1];
+    if(next){openListenSentence(next.id);return;}
     state.course.listeningCompleted = true;
     state.course.maxUnlocked=Math.max(state.course.maxUnlocked,3);if(!state.course.completedSteps.includes("listening"))state.course.completedSteps.push("listening");
     state.course.step = "speaking";
@@ -2715,6 +2722,8 @@ function advanceSpeakStage(id){
   state.micResult = null;
   saveProgress();
   if(st.mastered && state.course && state.course.step==="speaking"){
+    const next=lessonSpeakingItems().find(p=>{const record=speechActivityRecord("fluency",p.id);return p.id!==id&&(!record||(!record.concluida&&!record.revisaoPendente));});
+    if(next){saveProgress();openFluencyPhrase(next.id);return;}
     state.course.speakingCompleted = true;
     state.lessonProgress[activeLesson().id].speakingStatus="completed";state.course.maxUnlocked=Math.max(state.course.maxUnlocked,4);if(!state.course.completedSteps.includes("speaking"))state.course.completedSteps.push("speaking");
     state.course.step = "conversation";
@@ -2750,7 +2759,8 @@ function renderConversarIntro(){
 }
 
 function startConvo(id){
-  const scn = CONVO_SCENARIOS.find(s=>s.id===id);
+  const scn = lessonConversationItems().find(s=>String(s.id)===String(id));
+  if(!scn)return;
   state.convo.scenarioId = id;
   state.convo.stepIndex = 0;
   state.convo.npcLineIndex = 0;
@@ -2769,7 +2779,7 @@ function startConvo(id){
   playConvoNpcLines();
 }
 
-function currentConvoScenario(){ return CONVO_SCENARIOS.find(s=>s.id===state.convo.scenarioId); }
+function currentConvoScenario(){ return lessonConversationItems().find(s=>String(s.id)===String(state.convo.scenarioId)); }
 function currentConvoStep(){ const scn = currentConvoScenario(); return scn ? scn.steps[state.convo.stepIndex] : null; }
 
 function playConvoNpcLines(){
@@ -2897,7 +2907,8 @@ function micConvoCapture(){
 
 function finishConvo(scn){
   state.convo.finished = true;
-  state.convo.unlockedScenarios = Math.max(state.convo.unlockedScenarios, scn.id+1);
+  const scenarioIndex=lessonConversationItems().findIndex(item=>String(item.id)===String(scn.id));
+  state.convo.unlockedScenarios = Math.max(state.convo.unlockedScenarios, scenarioIndex+2);
   if(state.course && state.course.step==="conversation"){
     state.course.conversationCompleted = true;
     state.course.maxUnlocked=Math.max(state.course.maxUnlocked,5);if(!state.course.completedSteps.includes("conversation"))state.course.completedSteps.push("conversation");
@@ -3305,9 +3316,9 @@ function startNextLesson(id){const next=LESSON_REGISTRY.get(id)||LESSONS.find(l=
 function continueCourse(){cancelAudio();state.course.consultedStep=null;const idx=currentCourseIndex(),lesson=activeLesson(),steps=courseStepsFor(lesson);state.course.step=steps[idx].id;
   if(idx===0){state.lesson.currentLessonId=lesson.id;state.screen="lesson-dialogue-v2";}
   else if(idx===1){const e=lesson.expressions.find(x=>ensureLessonProgress(x.id)<TOTAL_EXPR_STAGES);state.lesson.currentLessonId=lesson.id;state.lesson.focusExpressionId=e.id;state.answered=false;state.lastResult=null;state.screen="aula-expressao";}
-  else if(idx===2){const id=(lesson.listening[0]||{}).id;if(id&&LISTEN_SENTENCES.some(x=>x.id===id)){openListenSentence(id);return;}state.screen="lesson-history";}
-  else if(idx===3){const id=(lesson.speaking[0]||{}).id;if(id&&FLUENCY_PHRASES.some(x=>x.id===id)){openFluencyPhrase(id);return;}state.screen="lesson-history";}
-  else if(idx===4){const id=(lesson.conversation[0]||{}).id;if(id&&CONVO_SCENARIOS.some(x=>x.id===id)){startConvo(id);return;}state.screen="lesson-history";}
+  else if(idx===2){const id=(lesson.listening[0]||{}).id;if(id){openListenSentence(id);return;}state.screen="lesson-history";}
+  else if(idx===3){const id=(lesson.speaking[0]||{}).id;if(id){openFluencyPhrase(id);return;}state.screen="lesson-history";}
+  else if(idx===4){const id=(lesson.conversation[0]||{}).id;if(id){startConvo(id);return;}state.screen="lesson-history";}
   else{state.lesson.currentLessonId=lesson.id;state.comparisonQuestions=[null,null,null];state.lesson.comparisonStep="intro";state.screen="aula-comparacao";}
   saveProgress();render();
 }
@@ -3540,10 +3551,75 @@ function finishCompletedModule(){
   render();
   saveProgress();
 }
+
+const ELEMENTARY_1A_LESSON={
+  id:"elementary-1a-nice-to-meet-you",
+  title:"1A — Nice to meet you",
+  scenario:"Primeiro dia em uma escola de inglês na Irlanda",
+  cefrLevel:"A1-A2",difficulty:2,supportLevel:"high-to-medium",primaryAccent:"irish",
+  learningObjective:"Apresentar-se, perguntar nomes, cumprimentar pessoas e compreender informações básicas de sala.",
+  requiredKnowledge:["saudações básicas"],videoUrl:null,ambience:{url:null,type:"school"},
+  sceneDecor:["🏫","📛","📚","🗓️"],
+  grammar:[
+    {id:"be-contractions",title:"Verbo be em apresentações",explain:"Use I'm para falar de você e you're para falar com outra pessoa.",examples:["I'm Alex.","You're in room 5."]},
+    {id:"this-is",title:"Apresentar outra pessoa",explain:"Use This is + nome quando você apresenta alguém.",examples:["This is Nora."]}
+  ],
+  characters:[
+    {id:"receptionist",name:"Maeve",initial:"M",color:"#4b6fa8",role:"recepcionista",pedagogicalRole:"receber alunos e confirmar informações",accent:"irish",variety:"uk",voiceType:"female",rate:.88},
+    {id:"student",name:"Alex",initial:"A",color:"#2f7d62",role:"novo aluno",pedagogicalRole:"praticar apresentações",accent:"american",variety:"us",voiceType:"neutral",rate:.92},
+    {id:"teacher",name:"Cian",initial:"C",color:"#b9821b",role:"professor",pedagogicalRole:"apresentar colegas e orientar a turma",accent:"irish",variety:"uk",voiceType:"male",rate:.88},
+    {id:"classmate",name:"Nora",initial:"N",color:"#c45d4d",role:"colega",pedagogicalRole:"praticar cumprimentos cotidianos",accent:"irish",variety:"uk",voiceType:"female",rate:.92}
+  ],
+  dialogue:[
+    {id:"e1a-t1",speaker:"receptionist",en:"Good morning. What's your name?",pron:"Gúd mórnin. Uóts iór nêim?",pt:"Bom dia. Qual é o seu nome?"},
+    {id:"e1a-t2",speaker:"student",en:"Hi, I'm Alex.",pron:"Rái, áim Éleks.",pt:"Oi, eu sou Alex."},
+    {id:"e1a-t3",speaker:"receptionist",en:"Sorry?",pron:"Sóri?",pt:"Desculpe? / Pode repetir?"},
+    {id:"e1a-t4",speaker:"student",en:"Alex.",pron:"Éleks.",pt:"Alex."},
+    {id:"e1a-t5",speaker:"receptionist",en:"Thank you. You're in room five.",pron:"Thénk iú. Iór in rúm fáiv.",pt:"Obrigada. Você está na sala cinco."},
+    {id:"e1a-t6",speaker:"teacher",en:"Hello. I'm Cian. Nice to meet you.",pron:"Helôu. Áim Kían. Náis tchu mít iú.",pt:"Olá. Eu sou Cian. Prazer em conhecer você."},
+    {id:"e1a-t7",speaker:"student",en:"Nice to meet you too.",pron:"Náis tchu mít iú tú.",pt:"Prazer em conhecer você também."},
+    {id:"e1a-t8",speaker:"teacher",en:"This is Nora.",pron:"Dís iz Nóra.",pt:"Esta é Nora."},
+    {id:"e1a-t9",speaker:"classmate",en:"Hi. How are you?",pron:"Rái. Ráu ár iú?",pt:"Oi. Como você está?"},
+    {id:"e1a-t10",speaker:"student",en:"I'm fine, thanks. And you?",pron:"Áim fáin, thénks. Énd iú?",pt:"Estou bem, obrigado. E você?"}
+  ],
+  expressions:[
+    {id:"e1a-whats-your-name",text:"What's your name?",lineId:"e1a-t1",pron:"uóts iór nêim",pt:"Qual é o seu nome?",explain:"Pergunta direta e comum para saber o nome de alguém.",missionPt:"Pergunte o nome do novo aluno.",acceptableAnswers:["What's your name?"],requiredChunks:["what's your name"],newContext:{prompt_pt:"Você conheceu uma pessoa em um curso. Pergunte o nome dela.",example:"What's your name?",acceptKeywords:[["what's","your","name"],["what","is","your","name"]]}},
+    {id:"e1a-im",text:"I'm...",lineId:"e1a-t2",pron:"áim",pt:"Eu sou...",explain:"I'm é a contração natural de I am ao se apresentar.",missionPt:"Apresente-se dizendo seu nome.",acceptableAnswers:["Hi, I'm Alex.","I'm Alex."],essentialWords:["Alex"],requiredChunks:["I'm"],newContext:{prompt_pt:"Apresente-se a um colega novo.",example:"Hi, I'm Alex.",acceptKeywords:[["i'm"],["i","am"]]}},
+    {id:"e1a-sorry",text:"Sorry?",lineId:"e1a-t3",pron:"sóri",pt:"Desculpe? / Pode repetir?",explain:"Com entonação de pergunta, é uma forma curta e educada de pedir repetição.",missionPt:"Você não ouviu o nome. Peça para a pessoa repetir.",acceptableAnswers:["Sorry?","Sorry, can you repeat that?"],requiredChunks:["sorry"],newContext:{prompt_pt:"Você não entendeu uma informação. Peça repetição.",example:"Sorry?",acceptKeywords:[["sorry"],["repeat"]]}},
+    {id:"e1a-youre-in-room",text:"You're in room...",lineId:"e1a-t5",pron:"iór in rúm",pt:"Você está na sala...",explain:"You're é a contração de you are. Números de sala são ditos sem a palavra number em muitos contextos.",missionPt:"Informe que o aluno está na sala cinco.",acceptableAnswers:["You're in room five."],essentialWords:["room","five"],requiredChunks:["you're in room"],newContext:{prompt_pt:"Diga a alguém que a aula é na sala oito.",example:"You're in room eight.",acceptKeywords:[["room","eight"]]}},
+    {id:"e1a-nice-to-meet-you",text:"Nice to meet you.",lineId:"e1a-t6",pron:"náis tchu mít iú",pt:"Prazer em conhecer você.",explain:"Usada normalmente no primeiro encontro, depois das apresentações.",missionPt:"Cumprimente alguém que acabou de conhecer.",acceptableAnswers:["Nice to meet you.","Nice to meet you too."],requiredChunks:["nice to meet you"],newContext:{prompt_pt:"Você foi apresentado a um novo colega. O que diz?",example:"Nice to meet you.",acceptKeywords:[["nice","meet","you"]]}},
+    {id:"e1a-this-is",text:"This is...",lineId:"e1a-t8",pron:"dís iz",pt:"Este/Esta é...",explain:"Use This is para apresentar uma pessoa a outra.",missionPt:"Apresente Nora ao novo aluno.",acceptableAnswers:["This is Nora."],essentialWords:["Nora"],requiredChunks:["this is"],newContext:{prompt_pt:"Apresente sua amiga Ana.",example:"This is Ana.",acceptKeywords:[["this","is","Ana"]]}},
+    {id:"e1a-how-are-you",text:"How are you?",lineId:"e1a-t9",pron:"ráu ár iú",pt:"Como você está?",explain:"Cumprimento cotidiano. A resposta curta mais comum é I'm fine, thanks.",missionPt:"Pergunte como o novo colega está.",acceptableAnswers:["How are you?"],requiredChunks:["how are you"],newContext:{prompt_pt:"Cumprimente um colega e pergunte como ele está.",example:"Hi. How are you?",acceptKeywords:[["how","are","you"]]}},
+    {id:"e1a-fine-thanks",text:"I'm fine, thanks. And you?",lineId:"e1a-t10",pron:"áim fáin, thénks. énd iú",pt:"Estou bem, obrigado. E você?",explain:"Resposta curta que também devolve a pergunta para manter a conversa.",missionPt:"Responda que está bem e devolva a pergunta.",acceptableAnswers:["I'm fine, thanks. And you?","Fine, thanks. And you?"],requiredChunks:["fine thanks","and you"],newContext:{prompt_pt:"Um colega pergunta How are you?. Responda e devolva a pergunta.",example:"I'm fine, thanks. And you?",acceptKeywords:[["fine","thanks","you"]]}}
+  ],
+  listening:[
+    {id:"e1a-l1",en:"Good afternoon. I'm Emma.",pron:"Gúd áfternún. Áim Éma.",pt:"Boa tarde. Eu sou Emma.",key:"Good afternoon",note:"Use entre o meio-dia e o fim da tarde."},
+    {id:"e1a-l2",en:"You're in room twelve.",pron:"Iór in rúm tuélv.",pt:"Você está na sala doze.",key:"room twelve",note:"Prática dos números de 1 a 20 em informações reais."},
+    {id:"e1a-l3",en:"See you on Monday.",pron:"Sí iú on Mândei.",pt:"Vejo você na segunda-feira.",key:"Monday",note:"Dias da semana são escritos com inicial maiúscula em inglês."},
+    {id:"e1a-l4",en:"Good evening. Nice to meet you.",pron:"Gúd ívnin. Náis tchu mít iú.",pt:"Boa noite. Prazer em conhecer você.",key:"Good evening",note:"Good evening é um cumprimento; goodnight é usado ao se despedir ou dormir."}
+  ],
+  speaking:[
+    {id:"e1a-f1",en:"Hi, I'm Alex. Nice to meet you.",pron:"Rái, áim Éleks. Náis tchu mít iú.",pt:"Oi, eu sou Alex. Prazer em conhecer você.",chunks:[{text:"Hi, I'm Alex"},{text:"Nice to meet you"}],requiredChunks:["nice to meet you"]},
+    {id:"e1a-f2",en:"What's your name?",pron:"Uóts iór nêim?",pt:"Qual é o seu nome?",chunks:[{text:"What's"},{text:"your name"}],requiredChunks:["your name"]},
+    {id:"e1a-f3",en:"I'm fine, thanks. And you?",pron:"Áim fáin, thénks. Énd iú?",pt:"Estou bem, obrigado. E você?",chunks:[{text:"I'm fine"},{text:"thanks"},{text:"And you"}],requiredChunks:["and you"]}
+  ],
+  conversation:[
+    {id:"e1a-c1",title:"Conhecer um colega no primeiro dia",scenario:"Antes da aula, você conversa com Nora.",role:"classmate",steps:[
+      {npc:[{us:"Hi! I'm Nora. What's your name?",uk:"Hi! I'm Nora. What's your name?",pron:"Rái! Áim Nóra. Uóts iór nêim?",pt:"Oi! Eu sou Nora. Qual é o seu nome?"}],accept:[["i'm"],["i","am"],["my","name"]],hints:["Hi, I'm Alex.","My name is Alex."]},
+      {npc:[{us:"Nice to meet you. How are you?",uk:"Nice to meet you. How are you?",pron:"Náis tchu mít iú. Ráu ár iú?",pt:"Prazer em conhecer você. Como você está?"}],accept:[["fine"],["good"],["well"]],hints:["I'm fine, thanks. And you?","I'm good, thanks."]}
+    ]}
+  ],
+  comparison:{questions:[
+    {q:"O que você diz quando não ouviu o nome?",opts:["Sorry?","Goodnight.","You're welcome."],correct:"Sorry?",expressionId:"e1a-sorry",explain:"Sorry? com entonação de pergunta pede que a pessoa repita."},
+    {q:"Qual frase apresenta outra pessoa?",opts:["This is Nora.","I'm Nora.","How are you?"],correct:"This is Nora.",expressionId:"e1a-this-is",explain:"This is + nome é usado para apresentar alguém."},
+    {q:"Qual é um cumprimento apropriado à noite ao chegar?",opts:["Good evening.","Goodnight.","See you."],correct:"Good evening.",expressionId:"e1a-nice-to-meet-you",explain:"Good evening cumprimenta; goodnight costuma encerrar o contato."}
+  ]},review:{srs:true,variedContexts:true,maxModuleAttempts:2},unlockRules:{sequential:true}
+};
 function answerReviewLight(exprId,text){if(state.answered)return;const expr=findExpr(exprId).expr,n=normalize(text),keywords=normalize(expr.pt).split(" ").filter(w=>w.length>3);state.answered=true;state.lastResult=keywords.some(w=>n.includes(w))&&n.length>=8;playFeedbackEffect(state.lastResult,`review:${exprId}:${ensureLessonProgress(exprId)}`);recordAttempt(exprId,state.lastResult?"correct":"incorrect","independent",{modality:"writing"});scheduleSrs(exprId,{correct:state.lastResult,usedHint:false,context:"recuperação final",modality:"writing"});if(!state.lastResult)registerModuleError(exprId,"review");saveProgress();render();}
 
 /* boot */
 hydrateBuiltInLesson();
+registerLessonPackage(ELEMENTARY_1A_LESSON,{allowFallbacks:true});
 if(window.speechSynthesis){
   window.speechSynthesis.onvoiceschanged = ()=>{};
 }
